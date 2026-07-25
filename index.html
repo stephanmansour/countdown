@@ -1,0 +1,609 @@
+<!doctype html>
+<html lang="de" data-mode="setup">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Countdown</title>
+<style>
+  /* ---------------------------------------------------------------
+     1. Tokens
+  --------------------------------------------------------------- */
+  :root {
+    --paper:      #fbfbfa;
+    --ink:        #1f1e1c;
+    --muted:      #7a7873;
+    --hairline:   #e5e3df;
+    --signal:     #0b5d4e;
+    --signal-soft:#e6efec;
+
+    --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  /* ---------------------------------------------------------------
+     2. Countdown (wird in Notion eingebettet, deshalb bewusst leise:
+        transparenter Hintergrund, Notion-Schriftstack, Notion-Grau)
+  --------------------------------------------------------------- */
+  .cd {
+    --cd-fg:     #37352f;
+    --cd-muted:  #787774;
+    --cd-accent: var(--cd-fg);
+    --cd-num:    clamp(30px, 9vw, 42px);
+    font-family: var(--sans);
+    color: var(--cd-fg);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 4px 2px;
+  }
+  .cd[data-size="s"]  { --cd-num: clamp(22px, 6vw, 28px); }
+  .cd[data-size="l"]  { --cd-num: clamp(38px, 11vw, 58px); }
+  .cd[data-size="xl"] { --cd-num: clamp(44px, 13vw, 76px); }
+
+  .cd[data-align="center"] { align-items: center; text-align: center; }
+  .cd[data-align="left"]   { align-items: flex-start; text-align: left; }
+
+  .cd[data-theme="dark"] { --cd-fg: #ebebea; --cd-muted: #9b9a97; }
+  @media (prefers-color-scheme: dark) {
+    .cd[data-theme="auto"] { --cd-fg: #ebebea; --cd-muted: #9b9a97; }
+  }
+
+  .cd-title {
+    font-size: max(12px, calc(var(--cd-num) * 0.3));
+    color: var(--cd-muted);
+    letter-spacing: 0.01em;
+  }
+  .cd-row {
+    display: flex;
+    align-items: baseline;
+    gap: calc(var(--cd-num) * 0.72);
+  }
+  .cd-cell { display: flex; flex-direction: column; align-items: inherit; gap: 4px; }
+  .cd[data-align="center"] .cd-cell { align-items: center; }
+  .cd-value {
+    font-size: var(--cd-num);
+    font-weight: 500;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+    color: var(--cd-accent);
+  }
+  .cd-label {
+    font-size: max(11px, calc(var(--cd-num) * 0.26));
+    line-height: 1.2;
+    color: var(--cd-muted);
+  }
+  .cd-sign {
+    font-size: var(--cd-num);
+    font-weight: 500;
+    line-height: 1;
+    color: var(--cd-accent);
+    margin-right: calc(var(--cd-num) * -0.45);
+  }
+  .cd-done {
+    font-size: calc(var(--cd-num) * 0.62);
+    font-weight: 500;
+    line-height: 1.2;
+    color: var(--cd-accent);
+  }
+
+  .cd[data-state="running"] .cd-done { display: none; }
+  .cd[data-state="done"] .cd-row,
+  .cd[data-state="done"] .cd-title { display: none; }
+
+  /* ---------------------------------------------------------------
+     3. Modus-Umschaltung
+  --------------------------------------------------------------- */
+  html[data-mode="live"] { background: var(--page-bg, transparent); }
+  html[data-mode="live"] body { background: transparent; }
+  html[data-mode="live"] #console { display: none; }
+  html[data-mode="setup"] #stage { display: none; }
+
+  body { margin: 0; }
+  html[data-mode="live"] body {
+    display: flex;
+    justify-content: center;
+    padding: 12px;
+    font-family: var(--sans);
+  }
+
+  /* ---------------------------------------------------------------
+     4. Konsole
+  --------------------------------------------------------------- */
+  html[data-mode="setup"] body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    padding: 40px 20px 72px;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; }
+
+  .masthead { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+  .masthead h1 {
+    font-size: 19px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 0;
+  }
+  .live-dot {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--signal);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+  .live-dot::before {
+    content: "";
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--signal);
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .25 } }
+  @media (prefers-reduced-motion: reduce) { .live-dot::before { animation: none } }
+
+  .lede { color: var(--muted); font-size: 13.5px; line-height: 1.55; margin: 10px 0 0; max-width: 56ch; }
+
+  .panel { border-top: 1px solid var(--hairline); margin-top: 30px; padding-top: 22px; }
+  .panel > h2 {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    font-weight: 500;
+    margin: 0 0 16px;
+  }
+
+  .grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 16px 20px; }
+  .grid .span { grid-column: 1 / -1; }
+  @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
+
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field > span {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--muted);
+  }
+  .field input[type="text"],
+  .field input[type="datetime-local"],
+  .field select {
+    font: inherit;
+    font-size: 14px;
+    color: var(--ink);
+    background: #fff;
+    border: 1px solid var(--hairline);
+    border-radius: 6px;
+    padding: 9px 10px;
+    width: 100%;
+    min-width: 0;
+  }
+  .field input[type="datetime-local"] { font-family: var(--mono); font-size: 13px; }
+  input:focus-visible, select:focus-visible, button:focus-visible {
+    outline: 2px solid var(--signal);
+    outline-offset: 2px;
+  }
+
+  .checks { display: flex; flex-wrap: wrap; gap: 8px; }
+  .checks label {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 13.5px;
+    border: 1px solid var(--hairline);
+    background: #fff;
+    border-radius: 999px;
+    padding: 7px 13px 7px 11px;
+    cursor: pointer;
+  }
+  .checks input { accent-color: var(--signal); margin: 0; }
+  .checks label:has(input:checked) { border-color: var(--signal); background: var(--signal-soft); }
+
+  .plate {
+    border: 1px solid var(--hairline);
+    border-radius: 10px;
+    padding: 30px 22px;
+    display: flex;
+    justify-content: center;
+    background: #fff;
+  }
+  .plate[data-bg="dark"] { background: #191919; border-color: #2f2f2f; }
+  .plate-note { font-size: 12px; color: var(--muted); margin: 10px 0 0; }
+
+  .linkbar { display: flex; gap: 8px; align-items: stretch; }
+  .linkbar input {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    flex: 1;
+    border: 1px solid var(--hairline);
+    border-radius: 6px;
+    padding: 10px;
+    background: #fff;
+    color: var(--ink);
+    min-width: 0;
+  }
+  .linkbar button {
+    font: inherit;
+    font-size: 13.5px;
+    font-weight: 500;
+    border: 0;
+    border-radius: 6px;
+    padding: 0 16px;
+    background: var(--signal);
+    color: #fff;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .linkbar button:hover { background: #094a3e; }
+
+  .steps { margin: 14px 0 0; padding-left: 18px; color: var(--muted); font-size: 13px; line-height: 1.7; }
+  .steps code {
+    font-family: var(--mono);
+    font-size: 12px;
+    background: #f0efec;
+    border-radius: 4px;
+    padding: 1px 5px;
+    color: var(--ink);
+  }
+</style>
+</head>
+<body>
+
+<!-- Countdown-Modus: nur das, was in Notion erscheint -->
+<div id="stage"></div>
+
+<!-- Konsole: sichtbar, solange kein Ziel in der URL steht -->
+<div id="console" class="wrap">
+  <header class="masthead">
+    <h1>Countdown bauen</h1>
+    <span class="live-dot">live</span>
+  </header>
+  <p class="lede">Zielzeitpunkt setzen, Link kopieren, in Notion als Einbettung einfügen. Läuft auf deinem eigenen Hosting, ohne Aufrufzähler und ohne Zeitlimit.</p>
+
+  <section class="panel">
+    <h2>Ziel</h2>
+    <div class="grid">
+      <label class="field">
+        <span>Zieldatum und Uhrzeit</span>
+        <input type="datetime-local" id="f-to" step="1">
+      </label>
+      <label class="field">
+        <span>Titel über dem Countdown</span>
+        <input type="text" id="f-title" placeholder="optional, z. B. Abfahrt Dänemark">
+      </label>
+      <label class="field">
+        <span>Text bei null</span>
+        <input type="text" id="f-done" value="Es ist so weit.">
+      </label>
+      <label class="field">
+        <span>Nach null</span>
+        <select id="f-up">
+          <option value="0">Text bei null anzeigen</option>
+          <option value="1">Weiterzählen (Zeit seit dem Termin)</option>
+        </select>
+      </label>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Darstellung</h2>
+    <div class="grid">
+      <div class="field span">
+        <span>Einheiten</span>
+        <div class="checks">
+          <label><input type="checkbox" id="u-d" checked> Tage</label>
+          <label><input type="checkbox" id="u-h" checked> Stunden</label>
+          <label><input type="checkbox" id="u-m" checked> Minuten</label>
+          <label><input type="checkbox" id="u-s" checked> Sekunden</label>
+          <label><input type="checkbox" id="f-pad"> Zweistellig (08 statt 8)</label>
+        </div>
+      </div>
+      <label class="field">
+        <span>Farbschema</span>
+        <select id="f-theme">
+          <option value="auto">Automatisch</option>
+          <option value="light">Hell</option>
+          <option value="dark">Dunkel</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>Größe</span>
+        <select id="f-size">
+          <option value="s">Klein</option>
+          <option value="m" selected>Mittel</option>
+          <option value="l">Groß</option>
+          <option value="xl">Sehr groß</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>Ausrichtung</span>
+        <select id="f-align">
+          <option value="center">Zentriert</option>
+          <option value="left">Linksbündig</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>Zahlenfarbe</span>
+        <input type="text" id="f-accent" placeholder="leer = Textfarbe, sonst z. B. #0b5d4e">
+      </label>
+      <label class="field">
+        <span>Sprache der Beschriftung</span>
+        <select id="f-lang">
+          <option value="de">Deutsch</option>
+          <option value="en">Englisch</option>
+        </select>
+      </label>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Vorschau</h2>
+    <div class="plate" id="plate"><div id="preview"></div></div>
+    <p class="plate-note" id="plate-note"></p>
+  </section>
+
+  <section class="panel">
+    <h2>Link zum Einbetten</h2>
+    <div class="grid">
+      <label class="field span">
+        <span>Adresse dieser Datei auf deinem Hosting</span>
+        <input type="text" id="f-base" placeholder="https://countdown.pages.dev/">
+      </label>
+    </div>
+    <div class="linkbar" style="margin-top:16px">
+      <input type="text" id="out" readonly>
+      <button type="button" id="copy">Link kopieren</button>
+    </div>
+    <ol class="steps">
+      <li>Link kopieren.</li>
+      <li>In Notion <code>/embed</code> tippen, Link einfügen, auf „Link einbetten" klicken.</li>
+      <li>Unterkante des Blocks auf die gewünschte Höhe ziehen.</li>
+    </ol>
+  </section>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ---------------- Grundlagen ---------------- */
+
+  var UNIT_MS = { d: 86400000, h: 3600000, m: 60000, s: 1000 };
+  var UNIT_ORDER = ["d", "h", "m", "s"];
+  var LABELS = {
+    de: { d: ["Tag", "Tage"], h: ["Stunde", "Stunden"], m: ["Minute", "Minuten"], s: ["Sekunde", "Sekunden"] },
+    en: { d: ["day", "days"], h: ["hour", "hours"], m: ["minute", "minutes"], s: ["second", "seconds"] }
+  };
+
+  var DEFAULTS = {
+    to: "", title: "", done: "Es ist so weit.",
+    units: "dhms", pad: false, theme: "auto", size: "m",
+    align: "center", accent: "", lang: "de", up: false, bg: ""
+  };
+
+  function normalizeColor(value) {
+    var color = String(value || "").trim();
+    if (!color) return "";
+    return /^[0-9a-f]{3,8}$/i.test(color) ? "#" + color : color;
+  }
+
+  function parseTarget(value) {
+    if (!value) return null;
+    var date = new Date(String(value).trim().replace(" ", "T"));
+    return isNaN(date.getTime()) ? null : date;
+  }
+
+  function splitDuration(ms, units) {
+    var rest = Math.max(0, ms);
+    return units.map(function (unit) {
+      var value = Math.floor(rest / UNIT_MS[unit]);
+      rest -= value * UNIT_MS[unit];
+      return { unit: unit, value: value };
+    });
+  }
+
+  /* ---------------- Countdown-Bauteil ---------------- */
+
+  var running = [];
+
+  function createCountdown(root, config) {
+    var target = parseTarget(config.to);
+    var units = config.units.split("").filter(function (unit) {
+      return UNIT_ORDER.indexOf(unit) !== -1;
+    });
+    if (!units.length) units = ["d", "h", "m", "s"];
+    units.sort(function (a, b) { return UNIT_ORDER.indexOf(a) - UNIT_ORDER.indexOf(b); });
+
+    root.className = "cd";
+    root.setAttribute("role", "timer");
+    root.dataset.theme = config.theme;
+    root.dataset.size = config.size;
+    root.dataset.align = config.align;
+    root.style.setProperty("--cd-accent", normalizeColor(config.accent));
+
+    var title = document.createElement("div");
+    title.className = "cd-title";
+    title.textContent = config.title;
+    if (!config.title) title.hidden = true;
+
+    var row = document.createElement("div");
+    row.className = "cd-row";
+
+    var sign = document.createElement("span");
+    sign.className = "cd-sign";
+    sign.textContent = "+";
+    sign.hidden = true;
+    row.appendChild(sign);
+
+    var cells = units.map(function (unit) {
+      var cell = document.createElement("div");
+      cell.className = "cd-cell";
+      var value = document.createElement("span");
+      value.className = "cd-value";
+      var label = document.createElement("span");
+      label.className = "cd-label";
+      cell.appendChild(value);
+      cell.appendChild(label);
+      row.appendChild(cell);
+      return { unit: unit, value: value, label: label };
+    });
+
+    var done = document.createElement("div");
+    done.className = "cd-done";
+    done.textContent = config.done;
+
+    root.replaceChildren(title, row, done);
+
+    function update() {
+      if (!target) {
+        root.dataset.state = "done";
+        done.textContent = "Kein Zieldatum gesetzt.";
+        return;
+      }
+      var remaining = target.getTime() - Date.now();
+      var elapsed = remaining <= 0;
+      root.dataset.state = (elapsed && !config.up) ? "done" : "running";
+      sign.hidden = !(elapsed && config.up);
+
+      var parts = splitDuration(elapsed ? -remaining : remaining, units);
+      parts.forEach(function (part, index) {
+        var text = String(part.value);
+        if (config.pad && index > 0 && text.length < 2) text = "0" + text;
+        var words = LABELS[config.lang] ? LABELS[config.lang][part.unit] : LABELS.de[part.unit];
+        var label = part.value === 1 ? words[0] : words[1];
+        if (cells[index].value.textContent !== text) cells[index].value.textContent = text;
+        if (cells[index].label.textContent !== label) cells[index].label.textContent = label;
+      });
+    }
+
+    update();
+    return update;
+  }
+
+  function mount(root, config) {
+    running.length = 0;
+    running.push(createCountdown(root, config));
+  }
+
+  setInterval(function () {
+    running.forEach(function (update) { update(); });
+  }, 250);
+
+  /* ---------------- Modus wählen ---------------- */
+
+  var params = new URLSearchParams(location.search);
+  var fromUrl = Object.assign({}, DEFAULTS);
+  Object.keys(DEFAULTS).forEach(function (key) {
+    if (!params.has(key)) return;
+    var raw = params.get(key);
+    fromUrl[key] = (typeof DEFAULTS[key] === "boolean") ? (raw === "1" || raw === "true") : raw;
+  });
+
+  if (parseTarget(fromUrl.to)) {
+    document.documentElement.dataset.mode = "live";
+    if (fromUrl.bg) document.documentElement.style.setProperty("--page-bg", fromUrl.bg);
+    document.title = fromUrl.title || "Countdown";
+    mount(document.getElementById("stage"), fromUrl);
+    return;
+  }
+
+  /* ---------------- Konsole ---------------- */
+
+  var el = function (id) { return document.getElementById(id); };
+  var fields = ["f-to", "f-title", "f-done", "f-up", "u-d", "u-h", "u-m", "u-s",
+                "f-pad", "f-theme", "f-size", "f-align", "f-accent", "f-lang", "f-base"];
+
+  function localInputValue(date) {
+    var pad = function (n) { return String(n).padStart(2, "0"); };
+    return date.getFullYear() + "-" + pad(date.getMonth() + 1) + "-" + pad(date.getDate()) +
+           "T" + pad(date.getHours()) + ":" + pad(date.getMinutes()) + ":00";
+  }
+
+  var suggestion = new Date();
+  suggestion.setDate(suggestion.getDate() + 7);
+  suggestion.setMinutes(0, 0, 0);
+  el("f-to").value = localInputValue(suggestion);
+
+  if (location.protocol === "http:" || location.protocol === "https:") {
+    el("f-base").value = location.origin + location.pathname;
+  }
+
+  function readConsole() {
+    var units = ["d", "h", "m", "s"].filter(function (unit) { return el("u-" + unit).checked; }).join("");
+    var picked = parseTarget(el("f-to").value);
+    return {
+      to: picked ? picked.toISOString() : "",
+      title: el("f-title").value.trim(),
+      done: el("f-done").value.trim() || DEFAULTS.done,
+      units: units || "dhms",
+      pad: el("f-pad").checked,
+      theme: el("f-theme").value,
+      size: el("f-size").value,
+      align: el("f-align").value,
+      accent: el("f-accent").value.trim(),
+      lang: el("f-lang").value,
+      up: el("f-up").value === "1",
+      bg: ""
+    };
+  }
+
+  function buildLink(config) {
+    var base = el("f-base").value.trim() || "https://dein-hosting.example/";
+    var query = new URLSearchParams();
+    Object.keys(DEFAULTS).forEach(function (key) {
+      var value = config[key];
+      if (typeof DEFAULTS[key] === "boolean") {
+        if (value) query.set(key, "1");
+      } else if (value && value !== DEFAULTS[key]) {
+        query.set(key, value);
+      }
+    });
+    return base.split("?")[0] + "?" + query.toString();
+  }
+
+  function refresh() {
+    var config = readConsole();
+    mount(el("preview"), config);
+    el("plate").dataset.bg = config.theme === "dark" ? "dark" : "light";
+    el("out").value = buildLink(config);
+
+    var picked = parseTarget(el("f-to").value);
+    el("plate-note").textContent = picked
+      ? "Ziel: " + picked.toLocaleString("de-DE", { dateStyle: "full", timeStyle: "medium" })
+      : "Zielzeitpunkt eintragen, dann läuft die Vorschau.";
+  }
+
+  fields.forEach(function (id) {
+    el(id).addEventListener("input", refresh);
+    el(id).addEventListener("change", refresh);
+  });
+
+  el("copy").addEventListener("click", function () {
+    var button = el("copy");
+    var value = el("out").value;
+    var confirm = function () {
+      button.textContent = "Kopiert";
+      setTimeout(function () { button.textContent = "Link kopieren"; }, 1600);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(value).then(confirm, function () { el("out").select(); });
+    } else {
+      el("out").select();
+      document.execCommand("copy");
+      confirm();
+    }
+  });
+
+  refresh();
+})();
+</script>
+</body>
+</html>
