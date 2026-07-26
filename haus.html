@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Haus</title>
+<style>
+  :root {
+    --ink:    #1f1e1c;
+    --muted:  #6f6d69;
+    --line:   rgba(0,0,0,.09);
+    --signal: #0b5d4e;
+    --shadow: 0 1px 2px rgba(0,0,0,.06), 0 8px 26px rgba(0,0,0,.10);
+    --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { font-family: var(--sans); color: var(--ink); background: transparent; padding: 4px; }
+
+  .card {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ---------- Kopf ---------- */
+  header { padding: 14px 16px 0; }
+  h1 { font-size: 16px; font-weight: 600; letter-spacing: -.01em; margin: 0; }
+  .ort { font-size: 12.5px; color: var(--muted); margin: 2px 0 0; }
+
+  .stats { display: flex; flex-wrap: wrap; gap: 6px 20px; margin-top: 11px; }
+  .stats div { min-width: 0; }
+  .stats dt {
+    font-family: var(--mono); font-size: 9px; text-transform: uppercase;
+    letter-spacing: .1em; color: var(--muted);
+  }
+  .stats dd { font-family: var(--mono); font-size: 12.5px; margin: 2px 0 0; }
+
+  /* ---------- Reiter ---------- */
+  .tabs {
+    display: flex; gap: 3px;
+    margin-top: 12px;
+    padding: 0 16px 10px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    border-bottom: 1px solid var(--line);
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tabs button {
+    font: inherit; font-size: 12.5px; font-weight: 500;
+    flex: none;
+    border: 0; background: transparent; color: var(--muted);
+    padding: 5px 11px; border-radius: 999px; cursor: pointer;
+  }
+  .tabs button[aria-selected="true"] { background: var(--signal); color: #fff; }
+  .tabs button:focus-visible, .foot a:focus-visible, .foot button:focus-visible {
+    outline: 2px solid var(--signal); outline-offset: 2px;
+  }
+
+  /* ---------- Inhalt ---------- */
+  .panel { flex: 1; overflow: auto; padding: 13px 16px 16px; }
+  .block + .block { margin-top: 15px; }
+  .block > h2 {
+    font-family: var(--mono); font-size: 9.5px; font-weight: 500;
+    text-transform: uppercase; letter-spacing: .1em; color: var(--muted);
+    margin: 0 0 7px;
+  }
+  .note { font-size: 13px; line-height: 1.5; margin: 0; }
+  .note + .note { margin-top: 7px; }
+
+  .pairs { display: grid; grid-template-columns: 1fr auto; gap: 6px 14px; margin: 0; }
+  .pairs dt { font-size: 13px; line-height: 1.4; }
+  .pairs dd {
+    font-family: var(--mono); font-size: 12.5px; line-height: 1.4;
+    margin: 0; text-align: right; white-space: nowrap;
+  }
+
+  ul { margin: 0; padding-left: 17px; }
+  li { font-size: 13px; line-height: 1.55; }
+
+  /* ---------- Fuß ---------- */
+  .foot {
+    border-top: 1px solid var(--line);
+    padding: 10px 16px 11px;
+    display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px;
+  }
+  .foot a, .foot button {
+    font: inherit; font-size: 12.5px; font-weight: 500;
+    color: var(--signal); text-decoration: none;
+    border: 0; background: transparent; padding: 0; cursor: pointer;
+  }
+  .foot .primary {
+    background: var(--signal); color: #fff;
+    border-radius: 999px; padding: 7px 14px;
+  }
+  .foot .primary:hover { background: #094a3e; }
+  .foot .spacer { flex: 1; }
+  .foot .expand { display: none; }
+  .foot .expand.available { display: inline; }
+  .disclaimer { font-size: 10.5px; color: var(--muted); line-height: 1.4; padding: 0 16px 11px; margin: 0; }
+
+  @media (max-width: 340px) {
+    .pairs { grid-template-columns: 1fr; gap: 2px; }
+    .pairs dd { text-align: left; }
+    .pairs dt { color: var(--muted); font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <header>
+    <h1 id="name"></h1>
+    <p class="ort" id="ort"></p>
+    <dl class="stats" id="stats"></dl>
+  </header>
+  <div class="tabs" id="tabs" role="tablist"></div>
+  <div class="panel" id="panel" role="tabpanel"></div>
+  <div class="foot">
+    <a class="primary" id="link-haus" target="_blank" rel="noopener">Hausseite</a>
+    <a id="link-plan" target="_blank" rel="noopener">Zimmerplan</a>
+    <span class="spacer"></span>
+    <button type="button" class="expand" id="expand">Vollbild</button>
+  </div>
+  <p class="disclaimer" id="disclaimer"></p>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* Alle Angaben stehen hier. Zum Ändern reicht dieser Block.
+     Blocktypen: "text" (Sätze), "pairs" (Bezeichnung + Wert), "liste" (Aufzählung). */
+  var HAUS = {
+    name: "Trevældcentret",
+    ort: "Vinderup · Midtjylland · Dänemark · direkt am Stubbergård Sø",
+    stats: [
+      ["Personen", "40–80"],
+      ["Empfohlen", "60"],
+      ["Zimmer", "12"],
+      ["Sanitär", "18 WC · 13 Du"]
+    ],
+    linkHaus: "https://www.jugendreisen-henser.de/haus/trevaeld/",
+    linkPlan: "https://www.jugendreisen-henser.de/zimmerplan/trevaeld",
+    disclaimer: "Angaben des Betreibers, Stand Juli 2026. Verbindlich ist der Vertrag.",
+    tabs: [
+      { label: "Überblick", blocks: [
+        { type: "text", items: [
+          "Freizeitheim auf einem Pfadfindergelände von 16 Hektar, der See reicht bis ans Grundstück.",
+          "Das Haupthaus hat drei Flügel wie ein dänischer Bauernhof. Daneben stehen drei Schlafhütten, das Schlafhaus Alkoven, das Gebäude Folkestuen und ein Sanitärgebäude in 150 Metern Entfernung."
+        ] },
+        { title: "Kennzahlen", type: "pairs", items: [
+          ["Belegung", "40–80, empfohlen 60"],
+          ["Zimmer", "12"],
+          ["Duschen und WC", "13 Du · 18 WC"],
+          ["Große Gruppenräume", "3 (+1 auf Anfrage)"],
+          ["Kanus", "5, inklusive"],
+          ["Energie", "PV und Erdwärme"],
+          ["Energiekosten", "im Preis enthalten"]
+        ] }
+      ] },
+      { label: "Schlafen", blocks: [
+        { title: "Betten nach Gebäude", type: "pairs", items: [
+          ["Haupthaus EG", "1 Zimmer · 2 Betten"],
+          ["Haupthaus OG", "4 Zimmer · 12+10 Plätze"],
+          ["Hütte 1", "1 Zimmer · 8 Betten"],
+          ["Hütte 2", "1 Zimmer · 8 Betten"],
+          ["Hütte 3", "1 Zimmer · 8 Betten"],
+          ["Alkoven", "4 Zimmer · 32 Betten"]
+        ] },
+        { title: "Zu beachten", type: "text", items: [
+          "Im Obergeschoss des Haupthauses liegen Matratzenböden. Belegt wird nur jede zweite Matratze, die daneben dient als Ablage. Viele Gruppen bringen dort das Team unter.",
+          "Bettwäsche, Kissen und Decken oder Schlafsack bringt jede Person selbst mit."
+        ] },
+        { title: "Sanitär", type: "pairs", items: [
+          ["Haupthaus", "2 Du · 3 WC"],
+          ["Folkestuen", "2 Du · 6 WC"],
+          ["Sanitärgebäude, 150 m", "9 Du · 9 WC"]
+        ] }
+      ] },
+      { label: "Küche", blocks: [
+        { title: "Ausstattung", type: "liste", items: [
+          "6 Gasherdplatten",
+          "Konvektomat",
+          "Kippbratpfanne",
+          "Durchschub-Spülmaschine",
+          "Kartoffelschälmaschine",
+          "Knet- und Küchenmaschine",
+          "1 Kühlschrank, 1 Tiefkühltruhe",
+          "2 Kaffeemaschinen, eine für große Mengen",
+          "Handmixer, Backblech, Töpfe, Pfannen, Geschirr, Besteck"
+        ] },
+        { title: "Räume", type: "text", items: [
+          "Hauptküche im Erdgeschoss des Haupthauses, daneben eine Grobküche zum Lagern und Vorbereiten, dazu eine separate Spülküche. Ausgelegt für 80 Personen.",
+          "Der Engpass ist die Kälte: ein Kühlschrank und eine Truhe für die ganze Gruppe. Frischware entsprechend takten."
+        ] }
+      ] },
+      { label: "Räume", blocks: [
+        { title: "Gruppenräume", type: "pairs", items: [
+          ["Speisesaal, Haupthaus", "85 Pers."],
+          ["Folkestuen", "70 Pers."],
+          ["Klasseværelse, Alkoven", "30 Pers."],
+          ["Loen, auf Anfrage", "85 Pers."]
+        ] },
+        { title: "Draußen", type: "text", items: [
+          "Eine Open-Air-Kirche mit Blick auf den See, als Amphitheater nutzbar. Der Innenhof bietet Platz für Treffen und Aktionen."
+        ] },
+        { title: "Technik", type: "text", items: [
+          "Internet vorhanden, zwei große Fernseher in den Gruppenräumen. Beamer und Leinwand selbst mitbringen, ebenso Verbrauchsmaterial."
+        ] }
+      ] },
+      { label: "Gelände", blocks: [
+        { title: "Maße", type: "pairs", items: [
+          ["Gelände", "16 Hektar"],
+          ["Rundweg um den See", "14 km"],
+          ["Kanus", "5"]
+        ] },
+        { title: "Vorhanden", type: "liste", items: [
+          "Badestelle mit kleinem Strand und Badebrücke",
+          "Fußballwiese und Beachvolleyballfeld",
+          "Grillplatz und Lagerfeuerstelle",
+          "Rafteplatz mit sortierten Stangen",
+          "Gartenmöbel und überdachte Sitzplätze"
+        ] },
+        { title: "Gut zu wissen", type: "text", items: [
+          "Auf dem Gelände können gleichzeitig andere Pfadfindergruppen zelten. Das Sanitärgebäude wird dann geteilt, der Schlüssel ist dafür ausgelegt."
+        ] }
+      ] },
+      { label: "Umgebung", blocks: [
+        { title: "Einkaufen", type: "pairs", items: [
+          ["Sevel", "Købmand, am nächsten"],
+          ["Vinderup", "Fakta, SuperBrugsen"],
+          ["Skive", "Netto"]
+        ] },
+        { title: "Ausflüge", type: "liste", items: [
+          "Freilichtmuseum Hjerl Hede",
+          "Kalkgrube Daubjerg, ein Kilometer beleuchtete Gänge bis 60 Meter tief",
+          "Aarhus",
+          "Legoland",
+          "Givskud Zoo, Randers Regnskov",
+          "Djurs Sommerland, Farup Sommerland"
+        ] },
+        { title: "Im Notfall", type: "text", items: [
+          "Hausarzt, Zahnarzt, Apotheke und Krankenhaus sind in der Umgebung erreichbar. Adressen vor Ort erfragen."
+        ] }
+      ] }
+    ]
+  };
+
+  var el = function (id) { return document.getElementById(id); };
+
+  el("name").textContent = HAUS.name;
+  el("ort").textContent = HAUS.ort;
+  el("disclaimer").textContent = HAUS.disclaimer;
+  el("link-haus").href = HAUS.linkHaus;
+  el("link-plan").href = HAUS.linkPlan;
+
+  HAUS.stats.forEach(function (stat) {
+    var wrap = document.createElement("div");
+    var term = document.createElement("dt");
+    term.textContent = stat[0];
+    var value = document.createElement("dd");
+    value.textContent = stat[1];
+    wrap.appendChild(term);
+    wrap.appendChild(value);
+    el("stats").appendChild(wrap);
+  });
+
+  function renderBlock(block) {
+    var section = document.createElement("section");
+    section.className = "block";
+
+    if (block.title) {
+      var heading = document.createElement("h2");
+      heading.textContent = block.title;
+      section.appendChild(heading);
+    }
+
+    if (block.type === "pairs") {
+      var pairs = document.createElement("dl");
+      pairs.className = "pairs";
+      block.items.forEach(function (item) {
+        var term = document.createElement("dt");
+        term.textContent = item[0];
+        var value = document.createElement("dd");
+        value.textContent = item[1];
+        pairs.appendChild(term);
+        pairs.appendChild(value);
+      });
+      section.appendChild(pairs);
+    } else if (block.type === "liste") {
+      var list = document.createElement("ul");
+      block.items.forEach(function (item) {
+        var entry = document.createElement("li");
+        entry.textContent = item;
+        list.appendChild(entry);
+      });
+      section.appendChild(list);
+    } else {
+      block.items.forEach(function (item) {
+        var paragraph = document.createElement("p");
+        paragraph.className = "note";
+        paragraph.textContent = item;
+        section.appendChild(paragraph);
+      });
+    }
+
+    return section;
+  }
+
+  var buttons = [];
+
+  function showTab(index) {
+    buttons.forEach(function (button, position) {
+      button.setAttribute("aria-selected", String(position === index));
+    });
+    var panel = el("panel");
+    panel.replaceChildren.apply(panel, HAUS.tabs[index].blocks.map(renderBlock));
+    panel.scrollTop = 0;
+  }
+
+  HAUS.tabs.forEach(function (tab, index) {
+    var button = document.createElement("button");
+    button.type = "button";
+    button.setAttribute("role", "tab");
+    button.setAttribute("aria-selected", "false");
+    button.textContent = tab.label;
+    button.addEventListener("click", function () { showTab(index); });
+    button.addEventListener("keydown", function (event) {
+      var step = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+      if (!step) return;
+      event.preventDefault();
+      var next = (index + step + buttons.length) % buttons.length;
+      buttons[next].focus();
+      showTab(next);
+    });
+    buttons.push(button);
+    el("tabs").appendChild(button);
+  });
+
+  showTab(0);
+
+  /* Vollbild, falls die Umgebung es erlaubt. In einer schmalen Notion-Spalte
+     ist das der bequemste Weg durch die Tabellen. */
+  var root = document.documentElement;
+  var enterFullscreen = root.requestFullscreen || root.webkitRequestFullscreen;
+  var leaveFullscreen = document.exitFullscreen || document.webkitExitFullscreen;
+  var inFullscreen = function () { return document.fullscreenElement || document.webkitFullscreenElement; };
+
+  if ((document.fullscreenEnabled || document.webkitFullscreenEnabled) && enterFullscreen) {
+    el("expand").classList.add("available");
+    el("expand").addEventListener("click", function () {
+      if (inFullscreen()) leaveFullscreen.call(document);
+      else enterFullscreen.call(root);
+    });
+  }
+})();
+</script>
+</body>
+</html>
