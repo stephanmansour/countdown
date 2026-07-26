@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Karte</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<style>
+  :root {
+    --ink:    #1f1e1c;
+    --muted:  #6f6d69;
+    --line:   rgba(0,0,0,.09);
+    --signal: #0b5d4e;
+    --shadow: 0 1px 2px rgba(0,0,0,.06), 0 8px 26px rgba(0,0,0,.12);
+    --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { font-family: var(--sans); color: var(--ink); background: #eae7e1; }
+  #map { position: absolute; inset: 0; }
+
+  /* ---------- Standortnadel ---------- */
+  .pin { position: relative; }
+  .pin svg { display: block; filter: drop-shadow(0 3px 5px rgba(0,0,0,.3)); }
+  .pin::before {
+    content: "";
+    position: absolute;
+    left: 50%; bottom: 2px;
+    width: 16px; height: 16px;
+    margin-left: -8px;
+    border-radius: 50%;
+    background: var(--signal);
+    opacity: .35;
+    animation: ping 2.4s ease-out 3;
+  }
+  @keyframes ping {
+    0%   { transform: scale(1);   opacity: .35; }
+    70%  { transform: scale(4.5); opacity: 0; }
+    100% { transform: scale(4.5); opacity: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) { .pin::before { animation: none; opacity: 0; } }
+
+  /* ---------- Infokarte ---------- */
+  .card {
+    position: absolute;
+    left: 14px; bottom: 14px;
+    z-index: 500;
+    max-width: min(330px, calc(100% - 28px));
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    padding: 13px 15px 12px;
+  }
+  .card h1 { font-size: 15px; font-weight: 600; letter-spacing: -.01em; margin: 0; }
+  .card p  { font-size: 13px; color: var(--muted); line-height: 1.45; margin: 3px 0 0; }
+  .card .row { display: flex; align-items: center; gap: 12px; margin-top: 10px; flex-wrap: wrap; }
+  .card a {
+    font-size: 12.5px; font-weight: 500; color: var(--signal);
+    text-decoration: none; border-bottom: 1px solid rgba(11,93,78,.3); padding-bottom: 1px;
+  }
+  .card a:hover { border-bottom-color: var(--signal); }
+  .coords { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+
+  /* ---------- Ebenenumschalter ---------- */
+  .layers {
+    position: absolute;
+    right: 12px; top: 12px;
+    z-index: 500;
+    display: flex;
+    background: #fff;
+    border-radius: 999px;
+    box-shadow: var(--shadow);
+    padding: 3px;
+  }
+  .layers button {
+    font: inherit; font-size: 12.5px; font-weight: 500;
+    border: 0; background: transparent; color: var(--muted);
+    padding: 6px 13px; border-radius: 999px; cursor: pointer;
+  }
+  .layers button[aria-pressed="true"] { background: var(--signal); color: #fff; }
+  .layers button:focus-visible, .recenter:focus-visible, .bar button:focus-visible, .bar input:focus-visible {
+    outline: 2px solid var(--signal); outline-offset: 2px;
+  }
+
+  .recenter {
+    position: absolute;
+    right: 12px; top: 58px;
+    z-index: 500;
+    width: 34px; height: 34px;
+    display: grid; place-items: center;
+    background: #fff; border: 0; border-radius: 9px;
+    box-shadow: var(--shadow); cursor: pointer; color: var(--ink);
+  }
+
+  /* ---------- Hinweis beim Scrollen ---------- */
+  .hint {
+    position: absolute; inset: 0; z-index: 600;
+    display: grid; place-items: center;
+    background: rgba(24,23,21,.42);
+    color: #fff; font-size: 14px; font-weight: 500;
+    opacity: 0; pointer-events: none;
+    transition: opacity .18s ease;
+  }
+  .hint.show { opacity: 1; }
+  @media (prefers-reduced-motion: reduce) { .hint { transition: none; } }
+
+  /* ---------- Leaflet-Bedienelemente ruhiger stellen ---------- */
+  .leaflet-control-zoom { border: 0 !important; box-shadow: var(--shadow); border-radius: 9px; overflow: hidden; }
+  .leaflet-control-zoom a { border: 0 !important; color: var(--ink) !important; }
+  .leaflet-control-attribution {
+    font-family: var(--sans); font-size: 10px;
+    background: rgba(255,255,255,.82) !important;
+    color: var(--muted);
+  }
+  .leaflet-control-attribution a { color: var(--muted); }
+
+  /* ---------- Baukastenleiste: nur beim direkten Aufruf ---------- */
+  .bar {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    z-index: 700;
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 12px;
+    background: #181715;
+    color: #fff;
+  }
+  .bar.show { display: flex; }
+  body.building .card { bottom: 66px; }
+  body.building .leaflet-bottom { bottom: 52px; }
+  .bar input {
+    font: inherit; font-size: 12.5px;
+    background: #24231f; color: #fff;
+    border: 1px solid #34322d; border-radius: 6px;
+    padding: 8px 10px; min-width: 0;
+  }
+  .bar .name { width: 190px; }
+  .bar .adr  { width: 230px; }
+  .bar .link { flex: 1; font-family: var(--mono); font-size: 11.5px; color: #cfcdc7; }
+  .bar button {
+    font: inherit; font-size: 12.5px; font-weight: 500;
+    background: var(--signal); color: #fff;
+    border: 0; border-radius: 6px; padding: 9px 14px; cursor: pointer; white-space: nowrap;
+  }
+  @media (max-width: 720px) { .bar .name, .bar .adr { display: none; } }
+
+  .failure {
+    position: absolute; inset: 0; z-index: 800;
+    display: grid; place-items: center; padding: 24px;
+    background: #f4f2ee; text-align: center;
+  }
+  .failure p { max-width: 40ch; font-size: 14px; line-height: 1.6; color: var(--muted); }
+  .failure strong { display: block; color: var(--ink); font-size: 15px; margin-bottom: 6px; }
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div class="layers">
+  <button type="button" id="btn-map" aria-pressed="true">Karte</button>
+  <button type="button" id="btn-sat" aria-pressed="false">Satellit</button>
+</div>
+
+<button type="button" class="recenter" id="recenter" title="Zurück zum Standort" aria-label="Zurück zum Standort">
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+    <circle cx="8" cy="8" r="3.2"/><path d="M8 .8v2.4M8 12.8v2.4M.8 8h2.4M12.8 8h2.4"/>
+  </svg>
+</button>
+
+<div class="card">
+  <h1 id="c-name"></h1>
+  <p id="c-adr"></p>
+  <div class="row">
+    <a id="c-route" href="#" target="_blank" rel="noopener">Route öffnen</a>
+    <span class="coords" id="c-coords"></span>
+  </div>
+</div>
+
+<div class="hint" id="hint">Zum Zoomen erst in die Karte klicken</div>
+
+<div class="bar" id="bar">
+  <input type="text" class="name" id="b-name" placeholder="Name">
+  <input type="text" class="adr" id="b-adr" placeholder="Adresse">
+  <input type="text" class="link" id="b-link" readonly>
+  <button type="button" id="b-copy">Link kopieren</button>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script>
+(function () {
+  "use strict";
+
+  /* Voreinstellung: Sommerlager Dänemark. Alles hier lässt sich per Link überschreiben. */
+  var CONFIG = {
+    lat: 56.4262961,
+    lng: 8.9400606,
+    z: 15,
+    name: "Trevæld Spejdercenter",
+    adr: "Trevældvej 7, 7830 Vinderup, Dänemark",
+    layer: "map",
+    fly: true
+  };
+
+  var el = function (id) { return document.getElementById(id); };
+
+  if (typeof L === "undefined") {
+    var failure = document.createElement("div");
+    failure.className = "failure";
+    failure.innerHTML = "<p><strong>Karte konnte nicht geladen werden</strong>" +
+      "Die Kartenbibliothek war nicht erreichbar. Adresse: " + CONFIG.name + ", " + CONFIG.adr + "</p>";
+    document.body.appendChild(failure);
+    return;
+  }
+
+  /* ---------------- Einstellungen aus dem Link ---------------- */
+
+  var params = new URLSearchParams(location.search);
+  var config = Object.assign({}, CONFIG);
+  ["name", "adr", "layer"].forEach(function (key) {
+    if (params.has(key)) config[key] = params.get(key);
+  });
+  ["lat", "lng", "z"].forEach(function (key) {
+    var value = parseFloat(params.get(key));
+    if (!isNaN(value)) config[key] = value;
+  });
+  if (params.has("fly")) config.fly = params.get("fly") === "1";
+
+  var target = [config.lat, config.lng];
+
+  /* ---------------- Karte ---------------- */
+
+  var map = L.map("map", {
+    zoomControl: false,
+    scrollWheelZoom: false,
+    attributionControl: true,
+    maxZoom: 19
+  });
+  L.control.zoom({ position: "bottomright" }).addTo(map);
+
+  var layers = {
+    map: L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+      subdomains: "abcd",
+      maxZoom: 19,
+      attribution: "© OpenStreetMap · © CARTO"
+    }),
+    sat: L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+      maxZoom: 19,
+      attribution: "Luftbild: Esri, Maxar, Earthstar Geographics"
+    })
+  };
+
+  var active = layers[config.layer] ? config.layer : "map";
+  layers[active].addTo(map);
+
+  function switchLayer(next) {
+    if (next === active) return;
+    map.removeLayer(layers[active]);
+    layers[next].addTo(map);
+    active = next;
+    el("btn-map").setAttribute("aria-pressed", String(next === "map"));
+    el("btn-sat").setAttribute("aria-pressed", String(next === "sat"));
+    updateLink();
+  }
+  el("btn-map").addEventListener("click", function () { switchLayer("map"); });
+  el("btn-sat").addEventListener("click", function () { switchLayer("sat"); });
+  el("btn-map").setAttribute("aria-pressed", String(active === "map"));
+  el("btn-sat").setAttribute("aria-pressed", String(active === "sat"));
+
+  /* ---------------- Nadel ---------------- */
+
+  var pin = L.divIcon({
+    className: "",
+    iconSize: [30, 40],
+    iconAnchor: [15, 40],
+    html: '<div class="pin"><svg width="30" height="40" viewBox="0 0 30 40" xmlns="http://www.w3.org/2000/svg">' +
+          '<path d="M15 39c0-9 11-14.5 11-24A11 11 0 1 0 4 15c0 9.5 11 15 11 24z" fill="#0b5d4e"/>' +
+          '<circle cx="15" cy="14.5" r="4.4" fill="#fff"/></svg></div>'
+  });
+  L.marker(target, { icon: pin, keyboard: false, alt: config.name }).addTo(map);
+
+  /* ---------------- Anflug ---------------- */
+
+  var stillMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (config.fly && !stillMotion) {
+    map.setView(target, 3, { animate: false });
+    setTimeout(function () { map.flyTo(target, config.z, { duration: 2.8 }); }, 400);
+  } else {
+    map.setView(target, config.z);
+  }
+
+  /* ---------------- Infokarte ---------------- */
+
+  el("c-name").textContent = config.name;
+  el("c-adr").textContent = config.adr;
+  el("c-coords").textContent = config.lat.toFixed(4) + ", " + config.lng.toFixed(4);
+  el("c-route").href = "https://www.google.com/maps/dir/?api=1&destination=" + config.lat + "," + config.lng;
+  el("recenter").addEventListener("click", function () { map.flyTo(target, config.z, { duration: 1 }); });
+
+  /* ---------------- Rücksicht auf die Notion-Seite ---------------- */
+  /* Mausrad zoomt erst nach einem Klick, Finger bewegen die Karte nur zu zweit.
+     Sonst bleibt die Notion-Seite beim Scrollen in der Karte hängen. */
+
+  var hint = el("hint");
+  var hintTimer = null;
+
+  function flashHint(text) {
+    hint.textContent = text;
+    hint.classList.add("show");
+    clearTimeout(hintTimer);
+    hintTimer = setTimeout(function () { hint.classList.remove("show"); }, 1400);
+  }
+
+  var container = map.getContainer();
+
+  container.addEventListener("wheel", function () {
+    if (!map.scrollWheelZoom.enabled()) flashHint("Zum Zoomen erst in die Karte klicken");
+  }, { passive: true });
+
+  map.on("click", function () { map.scrollWheelZoom.enable(); });
+  map.on("mouseout", function () { map.scrollWheelZoom.disable(); });
+
+  if (window.matchMedia("(hover: none)").matches) {
+    map.dragging.disable();
+    container.addEventListener("touchstart", function (event) {
+      if (event.touches.length > 1) map.dragging.enable();
+    }, { passive: true });
+    container.addEventListener("touchmove", function (event) {
+      if (event.touches.length === 1 && !map.dragging.enabled()) flashHint("Mit zwei Fingern bewegen");
+    }, { passive: true });
+    container.addEventListener("touchend", function (event) {
+      if (event.touches.length === 0) map.dragging.disable();
+    }, { passive: true });
+  }
+
+  /* ---------------- Baukasten (nur beim direkten Aufruf sichtbar) ---------------- */
+
+  if (window.self !== window.top) return;
+
+  el("bar").classList.add("show");
+  document.body.classList.add("building");
+  el("b-name").value = config.name;
+  el("b-adr").value = config.adr;
+
+  function updateLink() {
+    var center = map.getCenter();
+    var query = new URLSearchParams({
+      lat: center.lat.toFixed(6),
+      lng: center.lng.toFixed(6),
+      z: String(map.getZoom()),
+      name: el("b-name").value.trim(),
+      adr: el("b-adr").value.trim()
+    });
+    if (active !== "map") query.set("layer", active);
+    el("b-link").value = location.origin + location.pathname + "?" + query.toString();
+  }
+
+  map.on("moveend", updateLink);
+  el("b-name").addEventListener("input", updateLink);
+  el("b-adr").addEventListener("input", updateLink);
+  updateLink();
+
+  el("b-copy").addEventListener("click", function () {
+    var button = el("b-copy");
+    var done = function () {
+      button.textContent = "Kopiert";
+      setTimeout(function () { button.textContent = "Link kopieren"; }, 1600);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(el("b-link").value).then(done, function () { el("b-link").select(); });
+    } else {
+      el("b-link").select();
+      document.execCommand("copy");
+      done();
+    }
+  });
+})();
+</script>
+</body>
+</html>
