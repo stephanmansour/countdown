@@ -100,15 +100,36 @@
   .card:not([data-view="wetter"]) .weather { display: none; }
 
   /* ---------- Wetter ---------- */
-  .w-list { max-height: min(46vh, 250px); overflow: auto; margin-top: 9px; padding-top: 8px; border-top: 1px solid rgba(0,0,0,.08); }
-  .w-row { display: grid; grid-template-columns: 62px 20px 1fr auto; align-items: center; gap: 8px; padding: 3px 0; }
-  .w-row + .w-row { border-top: 1px solid rgba(0,0,0,.05); }
-  .w-day  { font-family: var(--mono); font-size: 11.5px; }
-  .w-sym  { font-size: 13px; line-height: 1; text-align: center; }
-  .w-temp { font-family: var(--mono); font-size: 11.5px; }
-  .w-rain { font-family: var(--mono); font-size: 10.5px; color: var(--muted); text-align: right; white-space: nowrap; }
-  .w-open { grid-column: 2 / -1; font-size: 11px; color: var(--muted); }
-  .w-note { font-size: 10.5px; color: var(--muted); line-height: 1.45; margin: 8px 0 0; }
+  .card[data-view="wetter"] { max-width: min(430px, calc(100% - 24px)); }
+  .w-wrap { position: relative; margin-top: 10px; }
+  .w-wrap::after {
+    content: "";
+    position: absolute; right: 0; top: 0; bottom: 0; width: 24px;
+    background: linear-gradient(to left, #fff, rgba(255,255,255,0));
+    pointer-events: none;
+  }
+  .w-strip { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+  .w-strip::-webkit-scrollbar { display: none; }
+  .w-day {
+    flex: none; width: 62px;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 7px 4px 8px;
+    border-radius: 10px;
+    background: #f6f5f3;
+  }
+  .w-day.today { background: rgba(11,93,78,.1); }
+  .w-day.open  { background: transparent; border: 1px dashed rgba(0,0,0,.15); }
+  .w-tag {
+    font-family: var(--mono); font-size: 8px; line-height: 11px; height: 11px;
+    letter-spacing: .08em; text-transform: uppercase; color: var(--route);
+  }
+  .w-wd  { font-size: 11.5px; font-weight: 600; line-height: 1.2; }
+  .w-dt  { font-family: var(--mono); font-size: 9.5px; color: var(--muted); line-height: 1.25; }
+  .w-ic  { margin: 4px 0 2px; height: 26px; }
+  .w-max { font-size: 13.5px; font-weight: 600; line-height: 1.2; }
+  .w-min { font-size: 11px; color: var(--muted); line-height: 1.2; }
+  .w-mm  { font-family: var(--mono); font-size: 9.5px; color: #4a7fb5; line-height: 13px; height: 13px; }
+  .w-note { white-space: pre-line; font-size: 10px; color: var(--muted); line-height: 1.5; margin: 9px 0 0; }
   .w-retry {
     font: inherit; font-size: 12.5px; font-weight: 500; color: var(--signal);
     background: transparent; border: 0; padding: 0; margin-top: 6px; cursor: pointer;
@@ -221,7 +242,7 @@
     .place p, .place .trip, .coords { display: none; }
     .card[data-view="anreise"] .trip, .card[data-view="abreise"] .trip { display: none; }
     .card .row { margin-top: 6px; }
-    .w-list { max-height: 40vh; }
+    .w-day { width: 58px; }
     .controls { left: 8px; top: 8px; gap: 5px; }
     .pills { padding: 2px; }
     .pills button { font-size: 11.5px; padding: 5px 9px; }
@@ -580,29 +601,71 @@
      beim Klick, das Ergebnis hält eine halbe Stunde. Fällt der Dienst aus,
      betrifft das nur diese Karte, nicht den Rest. */
 
-  var WMO = {
-    0:  ["\u2600\uFE0F", "klar"],
-    1:  ["\uD83C\uDF24\uFE0F", "meist klar"],
-    2:  ["\u26C5", "wolkig"],
-    3:  ["\u2601\uFE0F", "bedeckt"],
-    45: ["\uD83C\uDF2B\uFE0F", "Nebel"],
-    48: ["\uD83C\uDF2B\uFE0F", "Reifnebel"],
-    51: ["\uD83C\uDF26\uFE0F", "leichter Niesel"],
-    53: ["\uD83C\uDF26\uFE0F", "Niesel"],
-    55: ["\uD83C\uDF27\uFE0F", "starker Niesel"],
-    61: ["\uD83C\uDF26\uFE0F", "leichter Regen"],
-    63: ["\uD83C\uDF27\uFE0F", "Regen"],
-    65: ["\uD83C\uDF27\uFE0F", "starker Regen"],
-    71: ["\u2744\uFE0F", "leichter Schnee"],
-    73: ["\u2744\uFE0F", "Schnee"],
-    75: ["\u2744\uFE0F", "starker Schnee"],
-    80: ["\uD83C\uDF26\uFE0F", "leichte Schauer"],
-    81: ["\uD83C\uDF27\uFE0F", "Schauer"],
-    82: ["\u26C8\uFE0F", "heftige Schauer"],
-    95: ["\u26C8\uFE0F", "Gewitter"],
-    96: ["\u26C8\uFE0F", "Gewitter mit Hagel"],
-    99: ["\u26C8\uFE0F", "Gewitter mit Hagel"]
+  /* Eigene Symbole statt Emoji: einheitliche Strichstärke, gleiche Farben
+     wie der Rest der Karte, gleiche Darstellung auf jedem Gerät. */
+  var SUN = "#e8a33c", CLOUD = "#9aa3ab", DARK = "#858e96", WATER = "#4a7fb5", ICE = "#7fa8c9";
+
+  function cloud(color, high) {
+    return high
+      ? '<path d="M7.6 16.5h8.8a3.5 3.5 0 0 0 .45-6.97 4.95 4.95 0 0 0-9.48-.83A3.55 3.55 0 0 0 7.6 16.5Z" fill="' + color + '"/>'
+      : '<path d="M7.6 18.6h8.8a3.6 3.6 0 0 0 .45-7.17 5.05 5.05 0 0 0-9.68-.85A3.65 3.65 0 0 0 7.6 18.6Z" fill="' + color + '"/>';
+  }
+  function drops(count) {
+    var paths = ["M9.6 18.3l-.9 2.4", "M13 18.3l-.9 2.4", "M16.4 18.3l-.9 2.4"].slice(0, count);
+    return '<g stroke="' + WATER + '" stroke-width="1.7" stroke-linecap="round"><path d="' +
+           paths.join("") + '"/></g>';
+  }
+
+  var SHAPES = {
+    clear: '<circle cx="12" cy="12" r="4.7" fill="' + SUN + '"/>' +
+           '<g stroke="' + SUN + '" stroke-width="1.8" stroke-linecap="round"><path d="M12 2.6v2.6M12 18.8v2.6' +
+           'M2.6 12h2.6M18.8 12h2.6M5.4 5.4l1.9 1.9M16.7 16.7l1.9 1.9M18.6 5.4l-1.9 1.9M7.3 16.7l-1.9 1.9"/></g>',
+    few:   '<circle cx="9.2" cy="8.4" r="3.5" fill="' + SUN + '"/>' +
+           '<g stroke="' + SUN + '" stroke-width="1.6" stroke-linecap="round"><path d="M9.2 2.2v1.9' +
+           'M3 8.4h1.9M4.8 4l1.4 1.4M13.6 4l-1.4 1.4"/></g>' + cloud(CLOUD, false),
+    over:  cloud(DARK, false),
+    fog:   cloud(CLOUD, true) +
+           '<g stroke="' + CLOUD + '" stroke-width="1.7" stroke-linecap="round"><path d="M6.4 19.4h11.2M8.8 22h6.4"/></g>',
+    driz:  cloud(CLOUD, true) + drops(2),
+    rain:  cloud(DARK, true) + drops(3),
+    snow:  cloud(CLOUD, true) +
+           '<g stroke="' + ICE + '" stroke-width="1.6" stroke-linecap="round"><path d="M9.4 20.4h2.2M10.5 19.3v2.2' +
+           'M14.4 20.4h2.2M15.5 19.3v2.2"/></g>',
+    storm: cloud(DARK, true) +
+           '<path d="M13.4 17.4l-3.4 4.2h2.5l-.7 2.3 3.5-4.4h-2.5z" fill="' + SUN + '"/>'
   };
+
+  /* WMO-Schlüssel: Symbol und Klartext für die Beschriftung. */
+  var WMO = {
+    0:  ["clear", "klar"],
+    1:  ["few",   "meist klar"],
+    2:  ["few",   "wolkig"],
+    3:  ["over",  "bedeckt"],
+    45: ["fog",   "Nebel"],
+    48: ["fog",   "Reifnebel"],
+    51: ["driz",  "leichter Niesel"],
+    53: ["driz",  "Niesel"],
+    55: ["driz",  "starker Niesel"],
+    61: ["driz",  "leichter Regen"],
+    63: ["rain",  "Regen"],
+    65: ["rain",  "starker Regen"],
+    71: ["snow",  "leichter Schnee"],
+    73: ["snow",  "Schnee"],
+    75: ["snow",  "starker Schnee"],
+    80: ["driz",  "leichte Schauer"],
+    81: ["rain",  "Schauer"],
+    82: ["storm", "heftige Schauer"],
+    95: ["storm", "Gewitter"],
+    96: ["storm", "Gewitter mit Hagel"],
+    99: ["storm", "Gewitter mit Hagel"]
+  };
+
+  function iconFor(code) {
+    var entry = WMO[code] || ["over", "unbekannt"];
+    var svg = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
+              SHAPES[entry[0]] + '</svg>';
+    return { svg: svg, label: entry[1] };
+  }
 
   var WEEKDAYS = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
   var weatherCache = null;
@@ -631,60 +694,90 @@
   }
 
   function renderWeather(data) {
-    var body = el("w-body");
-    var rows = [];
+    var days = dayList();
+    var heute = isoDay(new Date());
+    var strip = document.createElement("div");
+    strip.className = "w-strip";
+    var todayTile = null;
 
-    dayList().forEach(function (date) {
-      var index = data.daily.time.indexOf(isoDay(date));
-      var row = document.createElement("div");
-      row.className = "w-row";
+    days.forEach(function (date, position) {
+      var key = isoDay(date);
+      var index = data.daily.time.indexOf(key);
+      var tile = document.createElement("div");
+      tile.className = "w-day" + (index === -1 ? " open" : "") + (key === heute ? " today" : "");
 
-      var day = document.createElement("span");
-      day.className = "w-day";
-      day.textContent = labelDay(date);
-      row.appendChild(day);
+      var tag = document.createElement("span");
+      tag.className = "w-tag";
+      tag.textContent = position === 0 ? "Anreise" : (position === days.length - 1 ? "Abreise" : "");
+      tile.appendChild(tag);
+
+      var weekday = document.createElement("span");
+      weekday.className = "w-wd";
+      weekday.textContent = WEEKDAYS[date.getDay()];
+      tile.appendChild(weekday);
+
+      var stamp = document.createElement("span");
+      stamp.className = "w-dt";
+      stamp.textContent = String(date.getDate()).padStart(2, "0") + "." +
+                          String(date.getMonth() + 1).padStart(2, "0") + ".";
+      tile.appendChild(stamp);
 
       if (index === -1) {
-        var open = document.createElement("span");
-        open.className = "w-open";
-        open.textContent = "noch keine Vorhersage";
-        row.appendChild(open);
-        rows.push(row);
+        var placeholder = document.createElement("span");
+        placeholder.className = "w-ic";
+        placeholder.style.display = "grid";
+        placeholder.style.placeItems = "center";
+        placeholder.style.color = "#b6b3ad";
+        placeholder.textContent = "–";
+        tile.appendChild(placeholder);
+
+        var pending = document.createElement("span");
+        pending.className = "w-min";
+        pending.textContent = "offen";
+        tile.appendChild(pending);
+        strip.appendChild(tile);
         return;
       }
 
-      var code = WMO[data.daily.weather_code[index]] || ["\u2022", "unbekannt"];
-      var symbol = document.createElement("span");
-      symbol.className = "w-sym";
-      symbol.textContent = code[0];
-      symbol.title = code[1];
+      var icon = iconFor(data.daily.weather_code[index]);
+      var holder = document.createElement("span");
+      holder.className = "w-ic";
+      holder.innerHTML = icon.svg;
+      holder.title = icon.label;
+      tile.appendChild(holder);
 
-      var temp = document.createElement("span");
-      temp.className = "w-temp";
-      temp.textContent = Math.round(data.daily.temperature_2m_max[index]) + "° / " +
-                         Math.round(data.daily.temperature_2m_min[index]) + "°";
+      var high = document.createElement("span");
+      high.className = "w-max";
+      high.textContent = Math.round(data.daily.temperature_2m_max[index]) + "°";
+      tile.appendChild(high);
 
-      var rain = document.createElement("span");
-      rain.className = "w-rain";
+      var low = document.createElement("span");
+      low.className = "w-min";
+      low.textContent = Math.round(data.daily.temperature_2m_min[index]) + "°";
+      tile.appendChild(low);
+
       var mm = data.daily.precipitation_sum[index];
-      rain.textContent = (mm === null ? "–" : (Math.round(mm * 10) / 10) + " mm");
+      var rain = document.createElement("span");
+      rain.className = "w-mm";
+      rain.textContent = (mm && mm >= 0.1) ? (Math.round(mm * 10) / 10) + " mm" : "";
+      tile.appendChild(rain);
 
-      row.appendChild(symbol);
-      row.appendChild(temp);
-      row.appendChild(rain);
-      rows.push(row);
+      if (key === heute) todayTile = tile;
+      strip.appendChild(tile);
     });
 
-    var list = document.createElement("div");
-    list.className = "w-list";
-    rows.forEach(function (row) { list.appendChild(row); });
-    body.replaceChildren(list);
+    var wrap = document.createElement("div");
+    wrap.className = "w-wrap";
+    wrap.appendChild(strip);
+    el("w-body").replaceChildren(wrap);
+
+    if (todayTile) strip.scrollLeft = Math.max(0, todayTile.offsetLeft - 8);
 
     var stand = new Date(data.abgerufen);
-    el("w-note").textContent = "Stand " + labelDay(stand) + " " +
-      String(stand.getHours()).padStart(2, "0") + ":" +
-      String(stand.getMinutes()).padStart(2, "0") +
-      " · Quelle Open-Meteo. Über eine Woche im Voraus ist das ein Trend, keine Zusage.";
+    el("w-note").textContent =
+      "Abgerufen " + String(stand.getHours()).padStart(2, "0") + ":" +
+      String(stand.getMinutes()).padStart(2, "0") + " · Open-Meteo\n" +
+      "Über eine Woche im Voraus ist das ein Trend, keine Zusage.";
   }
 
   function weatherMessage(text, withRetry) {
