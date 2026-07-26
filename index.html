@@ -104,9 +104,14 @@
   html[data-mode="setup"] #stage { display: none; }
 
   body { margin: 0; }
+  /* Senkrecht mittig, damit der Countdown in einer Notion-Spalte auf gleicher
+     Höhe sitzt wie die Kacheln daneben. min-height statt height, damit bei
+     einem sehr flachen Block nichts oben abgeschnitten wird. */
+  html[data-mode="live"], html[data-mode="live"] body { height: 100%; }
   html[data-mode="live"] body {
-    display: flex;
-    justify-content: center;
+    display: grid;
+    place-items: center;
+    min-height: 100%;
     padding: 12px;
     font-family: var(--sans);
   }
