@@ -51,6 +51,7 @@
     border: 3px solid var(--route);
     box-shadow: 0 1px 3px rgba(0,0,0,.45);
   }
+  .stop.nodot .stop-dot { display: none; }
   .stop-chip {
     position: absolute; left: 18px; top: -6px;
     white-space: nowrap;
@@ -87,9 +88,9 @@
   .coords { font-family: var(--mono); font-size: 11px; color: var(--muted); }
 
   /* ---------- Bedienelemente ---------- */
-  .layers {
+  .pills {
     position: absolute;
-    right: 12px; top: 12px;
+    right: 12px;
     z-index: 500;
     display: flex;
     background: #fff;
@@ -97,28 +98,20 @@
     box-shadow: var(--shadow);
     padding: 3px;
   }
-  .layers button {
+  .pills.top    { top: 12px; }
+  .pills.second { top: 53px; }
+  .pills button {
     font: inherit; font-size: 12.5px; font-weight: 500;
     border: 0; background: transparent; color: var(--muted);
     padding: 6px 13px; border-radius: 999px; cursor: pointer;
   }
-  .layers button[aria-pressed="true"] { background: var(--signal); color: #fff; }
-
-  .tools { position: absolute; right: 12px; top: 58px; z-index: 500; display: flex; flex-direction: column; gap: 7px; }
-  .tools button {
-    width: 34px; height: 34px;
-    display: grid; place-items: center;
-    background: #fff; border: 0; border-radius: 9px;
-    box-shadow: var(--shadow); cursor: pointer; color: var(--ink);
-  }
-  .tools button[aria-pressed="true"] { background: var(--route); color: #fff; }
-
-  .layers button:focus-visible, .tools button:focus-visible,
-  .bar button:focus-visible, .bar input:focus-visible, .bar label:focus-within {
+  .pills button[aria-pressed="true"] { background: var(--signal); color: #fff; }
+  #to-route[aria-pressed="true"] { background: var(--route); color: #fff; }
+  .pills button:focus-visible, .bar button:focus-visible, .bar input:focus-visible {
     outline: 2px solid var(--signal); outline-offset: 2px;
   }
 
-  /* ---------- Hinweis beim Scrollen ---------- */
+  /* ---------- Hinweis ---------- */
   .hint {
     position: absolute; inset: 0; z-index: 600;
     display: grid; place-items: center;
@@ -161,17 +154,18 @@
     border: 1px solid #34322d; border-radius: 6px;
     padding: 8px 10px; min-width: 0;
   }
-  .bar .name { width: 170px; }
-  .bar .adr  { width: 200px; }
+  .bar .name { width: 165px; }
+  .bar .adr  { width: 195px; }
   .bar .link { flex: 1; font-family: var(--mono); font-size: 11.5px; color: #cfcdc7; }
   .bar label { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; white-space: nowrap; }
   .bar input[type="checkbox"] { accent-color: var(--signal); margin: 0; }
+  .bar .tip { font-size: 11.5px; color: #8f8c85; white-space: nowrap; }
   .bar button {
     font: inherit; font-size: 12.5px; font-weight: 500;
     background: var(--signal); color: #fff;
     border: 0; border-radius: 6px; padding: 9px 14px; cursor: pointer; white-space: nowrap;
   }
-  @media (max-width: 820px) { .bar .name, .bar .adr { display: none; } }
+  @media (max-width: 900px) { .bar .name, .bar .adr, .bar .tip { display: none; } }
 
   .failure {
     position: absolute; inset: 0; z-index: 800;
@@ -186,24 +180,14 @@
 
 <div id="map"></div>
 
-<div class="layers">
+<div class="pills top">
   <button type="button" id="btn-map" aria-pressed="false">Karte</button>
   <button type="button" id="btn-sat" aria-pressed="true">Satellit</button>
 </div>
 
-<div class="tools">
-  <button type="button" id="to-house" title="Zurück zum Haus" aria-label="Zurück zum Haus">
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-      <circle cx="8" cy="8" r="3.2"/><path d="M8 .8v2.4M8 12.8v2.4M.8 8h2.4M12.8 8h2.4"/>
-    </svg>
-  </button>
-  <button type="button" id="to-route" title="Ganze Anreise zeigen" aria-label="Ganze Anreise zeigen">
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-      <path d="M4 13c0-3.5 8-2.5 8-6.5" stroke-linecap="round"/>
-      <circle cx="4" cy="13" r="1.9" fill="currentColor" stroke="none"/>
-      <circle cx="12" cy="4" r="1.9"/>
-    </svg>
-  </button>
+<div class="pills second">
+  <button type="button" id="to-house" aria-pressed="true">Haus</button>
+  <button type="button" id="to-route" aria-pressed="false">Anreise</button>
 </div>
 
 <div class="card">
@@ -218,6 +202,7 @@
 <div class="hint" id="hint">Zum Zoomen erst in die Karte klicken</div>
 
 <div class="bar" id="bar">
+  <span class="tip">Klick setzt die Nadel</span>
   <input type="text" class="name" id="b-name" placeholder="Name">
   <input type="text" class="adr" id="b-adr" placeholder="Adresse">
   <label><input type="checkbox" id="b-anreise" checked> Anreise</label>
@@ -230,10 +215,14 @@
 (function () {
   "use strict";
 
-  /* Voreinstellung: Sommerlager Dänemark. Alles hier lässt sich per Link überschreiben. */
+  /* Voreinstellung: Sommerlager Dänemark.
+     lat/lng ist die Nadel, clat/clng/z ist der Bildausschnitt beim Öffnen.
+     Beides lässt sich per Link überschreiben und ist bewusst getrennt. */
   var CONFIG = {
     lat: 56.4262961,
     lng: 8.9400606,
+    clat: null,
+    clng: null,
     z: 18,
     name: "Trevæld Spejdercenter",
     adr: "Trevældvej 7, 7830 Vinderup, Dänemark",
@@ -241,8 +230,8 @@
     anreise: true
   };
 
-  /* Anreise am Anreisetag. Zwischenpunkte sind grob am tatsächlichen
-     Streckenverlauf entlanggelegt, damit die Linie nicht quer durchs Land schneidet. */
+  /* Anreise am Anreisetag. Zwischenpunkte liegen grob am tatsächlichen
+     Streckenverlauf, damit die Linie nicht quer durchs Land schneidet. */
   var LEGS = [
     { style: "walk", points: [[48.136198, 11.562735], [48.140411, 11.558268]] },
     { style: "rail", points: [
@@ -267,17 +256,18 @@
     ] }
   ];
 
+  /* minZoom staffelt die Beschriftung: erst die Endpunkte, dann die Umstiege. */
   var STOPS = [
-    { at: [48.136198, 11.562735], name: "Landwehrstraße 13", time: "Treffpunkt",       minZoom: 10 },
-    { at: [48.140411, 11.558268], name: "München Hbf",       time: "ab 06:09 · ICE 886", minZoom: 6 },
-    { at: [53.456255, 9.991618],  name: "Hamburg-Harburg",   time: "11:44 → 11:59 · S3", minZoom: 6 },
-    { at: [53.655355, 9.797693],  name: "Pinneberg",         time: "12:53 → 12:57 · RE7", minZoom: 8, side: "left" },
-    { at: [54.774671, 9.436837],  name: "Flensburg Hbf",     time: "14:42 → 16:30 · Bus", minZoom: 6 },
-    { at: [56.426296, 8.940061],  name: "Trevæld",           time: "an 20:00",           minZoom: 6, side: "left" }
+    { at: [48.136198, 11.562735], name: "Landwehrstraße 13", time: "Treffpunkt",        minZoom: 11 },
+    { at: [48.140411, 11.558268], name: "München Hbf",       time: "ab 06:09 · ICE 886", minZoom: 5 },
+    { at: [53.456255, 9.991618],  name: "Hamburg-Harburg",   time: "11:44 → 11:59 · S3", minZoom: 7 },
+    { at: [53.655355, 9.797693],  name: "Pinneberg",         time: "12:53 → 12:57 · RE7", minZoom: 9, side: "left" },
+    { at: [54.774671, 9.436837],  name: "Flensburg Hbf",     time: "14:42 → 16:30 · Bus", minZoom: 7 },
+    { at: [56.426296, 8.940061],  name: "Trevæld",           time: "an 20:00",            minZoom: 5, side: "left", dot: false }
   ];
 
   /* Ab dieser Zoomstufe abwärts ist die Anreise zu sehen. Weiter drin wäre die
-     grobe Linie nur irreführend, weil sie nicht jeder Kurve folgt. */
+     grobe Linie irreführend, weil sie nicht jeder Kurve folgt. */
   var ANREISE_MAX_ZOOM = 12;
 
   var el = function (id) { return document.getElementById(id); };
@@ -298,13 +288,16 @@
   ["name", "adr", "layer"].forEach(function (key) {
     if (params.has(key)) config[key] = params.get(key);
   });
-  ["lat", "lng", "z"].forEach(function (key) {
+  ["lat", "lng", "clat", "clng", "z"].forEach(function (key) {
     var value = parseFloat(params.get(key));
     if (!isNaN(value)) config[key] = value;
   });
   if (params.has("anreise")) config.anreise = params.get("anreise") === "1";
 
-  var target = [config.lat, config.lng];
+  var place = L.latLng(config.lat, config.lng);
+  var start = (config.clat !== null && config.clng !== null)
+    ? L.latLng(config.clat, config.clng)
+    : place;
 
   /* ---------------- Karte ---------------- */
 
@@ -312,7 +305,7 @@
     zoomControl: false,
     scrollWheelZoom: false,
     maxZoom: 19
-  }).setView(target, config.z);
+  }).setView(start, config.z);
 
   L.control.zoom({ position: "bottomright" }).addTo(map);
 
@@ -345,9 +338,9 @@
   el("btn-map").addEventListener("click", function () { switchLayer("map"); });
   el("btn-sat").addEventListener("click", function () { switchLayer("sat"); });
 
-  /* ---------------- Standortnadel ---------------- */
+  /* ---------------- Nadel und Infokarte ---------------- */
 
-  var pin = L.divIcon({
+  var pinIcon = L.divIcon({
     className: "",
     iconSize: [30, 40],
     iconAnchor: [15, 40],
@@ -355,7 +348,15 @@
           '<path d="M15 39c0-9 11-14.5 11-24A11 11 0 1 0 4 15c0 9.5 11 15 11 24z" fill="#0b5d4e"/>' +
           '<circle cx="15" cy="14.5" r="4.4" fill="#fff"/></svg></div>'
   });
-  L.marker(target, { icon: pin, keyboard: false, alt: config.name }).addTo(map);
+  var pin = L.marker(place, { icon: pinIcon, keyboard: false, alt: config.name }).addTo(map);
+
+  function describePlace() {
+    pin.setLatLng(place);
+    el("c-name").textContent = el("b-name").value.trim() || config.name;
+    el("c-adr").textContent = el("b-adr").value.trim() || config.adr;
+    el("c-coords").textContent = place.lat.toFixed(4) + ", " + place.lng.toFixed(4);
+    el("c-route").href = "https://www.google.com/maps/dir/?api=1&destination=" + place.lat + "," + place.lng;
+  }
 
   /* ---------------- Anreise ---------------- */
 
@@ -385,11 +386,14 @@
   });
 
   STOPS.forEach(function (stop) {
+    var classes = "stop";
+    if (stop.side === "left") classes += " left";
+    if (stop.dot === false) classes += " nodot";
     var marker = L.marker(stop.at, {
       keyboard: false,
       interactive: false,
       icon: L.divIcon({
-        className: "stop" + (stop.side === "left" ? " left" : ""),
+        className: classes,
         iconSize: [12, 12],
         iconAnchor: [6, 6],
         html: '<span class="stop-dot"></span><span class="stop-chip"><b>' +
@@ -406,7 +410,10 @@
 
     if (visible && !map.hasLayer(anreiseLayer)) anreiseLayer.addTo(map);
     if (!visible && map.hasLayer(anreiseLayer)) map.removeLayer(anreiseLayer);
+
     el("to-route").setAttribute("aria-pressed", String(visible));
+    el("to-house").setAttribute("aria-pressed", String(!visible));
+    el("to-route").hidden = !config.anreise;
     if (!visible) return;
 
     stopMarkers.forEach(function (entry) {
@@ -416,22 +423,13 @@
   }
 
   map.on("zoomend", refreshAnreise);
-  refreshAnreise();
 
   el("to-house").addEventListener("click", function () {
-    map.setView(target, config.z, { animate: false });
+    map.setView(place, Math.max(config.z, 18), { animate: false });
   });
   el("to-route").addEventListener("click", function () {
-    if (!config.anreise || !anreiseBounds) { map.setView(target, 7, { animate: false }); return; }
-    map.fitBounds(anreiseBounds, { padding: [42, 42], animate: false });
+    if (anreiseBounds) map.fitBounds(anreiseBounds, { padding: [42, 42], animate: false });
   });
-
-  /* ---------------- Infokarte ---------------- */
-
-  el("c-name").textContent = config.name;
-  el("c-adr").textContent = config.adr;
-  el("c-coords").textContent = config.lat.toFixed(4) + ", " + config.lng.toFixed(4);
-  el("c-route").href = "https://www.google.com/maps/dir/?api=1&destination=" + config.lat + "," + config.lng;
 
   /* ---------------- Rücksicht auf die Notion-Seite ---------------- */
   /* Mausrad zoomt erst nach einem Klick, Finger bewegen die Karte nur zu zweit.
@@ -469,6 +467,9 @@
     }, { passive: true });
   }
 
+  describePlace();
+  refreshAnreise();
+
   /* ---------------- Baukasten (nur beim direkten Aufruf sichtbar) ---------------- */
 
   if (window.self !== window.top) return;
@@ -482,8 +483,10 @@
   function updateLink() {
     var center = map.getCenter();
     var query = new URLSearchParams({
-      lat: center.lat.toFixed(6),
-      lng: center.lng.toFixed(6),
+      lat: place.lat.toFixed(6),
+      lng: place.lng.toFixed(6),
+      clat: center.lat.toFixed(6),
+      clng: center.lng.toFixed(6),
       z: String(map.getZoom()),
       name: el("b-name").value.trim(),
       adr: el("b-adr").value.trim()
@@ -494,8 +497,13 @@
   }
 
   map.on("moveend", updateLink);
-  el("b-name").addEventListener("input", updateLink);
-  el("b-adr").addEventListener("input", updateLink);
+  map.on("click", function (event) {
+    place = event.latlng;
+    describePlace();
+    updateLink();
+  });
+  el("b-name").addEventListener("input", function () { describePlace(); updateLink(); });
+  el("b-adr").addEventListener("input", function () { describePlace(); updateLink(); });
   el("b-anreise").addEventListener("change", function () {
     config.anreise = el("b-anreise").checked;
     refreshAnreise();
