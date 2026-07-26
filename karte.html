@@ -18,7 +18,7 @@
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
-  body { font-family: var(--sans); color: var(--ink); background: #eae7e1; }
+  body { font-family: var(--sans); color: var(--ink); background: #16202a; }
   #map { position: absolute; inset: 0; }
 
   /* ---------- Standortnadel ---------- */
@@ -69,9 +69,9 @@
   /* ---------- Infokarte ---------- */
   .card {
     position: absolute;
-    left: 14px; bottom: 14px;
+    left: 12px; bottom: 12px;
     z-index: 500;
-    max-width: min(330px, calc(100% - 28px));
+    max-width: min(330px, calc(100% - 24px));
     background: #fff;
     border-radius: 12px;
     box-shadow: var(--shadow);
@@ -79,6 +79,14 @@
   }
   .card h1 { font-size: 15px; font-weight: 600; letter-spacing: -.01em; margin: 0; }
   .card p  { font-size: 13px; color: var(--muted); line-height: 1.45; margin: 3px 0 0; }
+  .card .trip {
+    display: none;
+    white-space: pre-line;
+    font-family: var(--mono); font-size: 11px; line-height: 1.5;
+    margin-top: 7px; padding-top: 7px;
+    border-top: 1px solid rgba(0,0,0,.08);
+  }
+  .card[data-view="anreise"] .trip { display: block; }
   .card .row { display: flex; align-items: center; gap: 12px; margin-top: 10px; flex-wrap: wrap; }
   .card a {
     font-size: 12.5px; font-weight: 500; color: var(--signal);
@@ -87,10 +95,10 @@
   .card a:hover { border-bottom-color: var(--signal); }
   .coords { font-family: var(--mono); font-size: 11px; color: var(--muted); }
 
-  /* ---------- Bedienelemente ---------- */
+  /* ---------- Bedienelemente, links oben, weg von Notions Blockmenü ---------- */
   .pills {
     position: absolute;
-    right: 12px;
+    left: 12px; top: 12px;
     z-index: 500;
     display: flex;
     background: #fff;
@@ -98,16 +106,27 @@
     box-shadow: var(--shadow);
     padding: 3px;
   }
-  .pills.top    { top: 12px; }
-  .pills.second { top: 53px; }
   .pills button {
     font: inherit; font-size: 12.5px; font-weight: 500;
     border: 0; background: transparent; color: var(--muted);
     padding: 6px 13px; border-radius: 999px; cursor: pointer;
   }
-  .pills button[aria-pressed="true"] { background: var(--signal); color: #fff; }
+  #to-house[aria-pressed="true"] { background: var(--signal); color: #fff; }
   #to-route[aria-pressed="true"] { background: var(--route); color: #fff; }
-  .pills button:focus-visible, .bar button:focus-visible, .bar input:focus-visible {
+
+  .expand {
+    position: absolute;
+    left: 12px; top: 53px;
+    z-index: 500;
+    width: 34px; height: 34px;
+    display: none; place-items: center;
+    background: #fff; border: 0; border-radius: 9px;
+    box-shadow: var(--shadow); cursor: pointer; color: var(--ink);
+  }
+  .expand.available { display: grid; }
+
+  .pills button:focus-visible, .expand:focus-visible,
+  .bar button:focus-visible, .bar input:focus-visible {
     outline: 2px solid var(--signal); outline-offset: 2px;
   }
 
@@ -146,7 +165,7 @@
     color: #fff;
   }
   .bar.show { display: flex; }
-  body.building .card { bottom: 66px; }
+  body.building .card { bottom: 64px; }
   body.building .leaflet-bottom { bottom: 52px; }
   .bar input[type="text"] {
     font: inherit; font-size: 12.5px;
@@ -180,19 +199,21 @@
 
 <div id="map"></div>
 
-<div class="pills top">
-  <button type="button" id="btn-map" aria-pressed="false">Karte</button>
-  <button type="button" id="btn-sat" aria-pressed="true">Satellit</button>
+<div class="pills">
+  <button type="button" id="to-house" aria-pressed="false">Haus</button>
+  <button type="button" id="to-route" aria-pressed="true">Anreise</button>
 </div>
 
-<div class="pills second">
-  <button type="button" id="to-house" aria-pressed="true">Haus</button>
-  <button type="button" id="to-route" aria-pressed="false">Anreise</button>
-</div>
+<button type="button" class="expand" id="expand" title="Vollbild" aria-label="Vollbild">
+  <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+    <path d="M6 1.5H1.5V6M10 14.5h4.5V10M14.5 6V1.5H10M1.5 10v4.5H6"/>
+  </svg>
+</button>
 
-<div class="card">
+<div class="card" id="card">
   <h1 id="c-name"></h1>
   <p id="c-adr"></p>
+  <p class="trip" id="c-trip"></p>
   <div class="row">
     <a id="c-route" href="#" target="_blank" rel="noopener">Route öffnen</a>
     <span class="coords" id="c-coords"></span>
@@ -216,8 +237,8 @@
   "use strict";
 
   /* Voreinstellung: Sommerlager Dänemark.
-     lat/lng ist die Nadel, clat/clng/z ist der Bildausschnitt beim Öffnen.
-     Beides lässt sich per Link überschreiben und ist bewusst getrennt. */
+     lat/lng ist die Nadel, clat/clng/z der Bildausschnitt beim Öffnen.
+     Ohne Angabe im Link startet die Karte auf der ganzen Anreise. */
   var CONFIG = {
     lat: 56.4262961,
     lng: 8.9400606,
@@ -226,12 +247,19 @@
     z: 18,
     name: "Trevæld Spejdercenter",
     adr: "Trevældvej 7, 7830 Vinderup, Dänemark",
-    layer: "sat",
     anreise: true
   };
 
-  /* Anreise am Anreisetag. Zwischenpunkte liegen grob am tatsächlichen
-     Streckenverlauf, damit die Linie nicht quer durchs Land schneidet. */
+  var HOUSE_ZOOM = 18;
+
+  /* Ab dieser Zoomstufe abwärts ist die Anreise zu sehen. Weiter drin wäre die
+     grobe Linie irreführend, weil sie nicht jeder Kurve folgt. */
+  var ANREISE_MAX_ZOOM = 12;
+
+  var TRIP = "München Hbf 06:09 → Trevæld 20:00\n13 Std 51 Min · Zug, Zug, Zug, Bus";
+
+  /* Zwischenpunkte liegen grob am tatsächlichen Streckenverlauf,
+     damit die Linie nicht quer durchs Land schneidet. */
   var LEGS = [
     { style: "walk", points: [[48.136198, 11.562735], [48.140411, 11.558268]] },
     { style: "rail", points: [
@@ -258,17 +286,13 @@
 
   /* minZoom staffelt die Beschriftung: erst die Endpunkte, dann die Umstiege. */
   var STOPS = [
-    { at: [48.136198, 11.562735], name: "Landwehrstraße 13", time: "Treffpunkt",        minZoom: 11 },
-    { at: [48.140411, 11.558268], name: "München Hbf",       time: "ab 06:09 · ICE 886", minZoom: 5 },
-    { at: [53.456255, 9.991618],  name: "Hamburg-Harburg",   time: "11:44 → 11:59 · S3", minZoom: 7 },
+    { at: [48.136198, 11.562735], name: "Landwehrstraße 13", time: "Treffpunkt",         minZoom: 11 },
+    { at: [48.140411, 11.558268], name: "München Hbf",       time: "ab 06:09 · ICE 886",  minZoom: 5 },
+    { at: [53.456255, 9.991618],  name: "Hamburg-Harburg",   time: "11:44 → 11:59 · S3",  minZoom: 7 },
     { at: [53.655355, 9.797693],  name: "Pinneberg",         time: "12:53 → 12:57 · RE7", minZoom: 9, side: "left" },
     { at: [54.774671, 9.436837],  name: "Flensburg Hbf",     time: "14:42 → 16:30 · Bus", minZoom: 7 },
     { at: [56.426296, 8.940061],  name: "Trevæld",           time: "an 20:00",            minZoom: 5, side: "left", dot: false }
   ];
-
-  /* Ab dieser Zoomstufe abwärts ist die Anreise zu sehen. Weiter drin wäre die
-     grobe Linie irreführend, weil sie nicht jeder Kurve folgt. */
-  var ANREISE_MAX_ZOOM = 12;
 
   var el = function (id) { return document.getElementById(id); };
 
@@ -285,7 +309,7 @@
 
   var params = new URLSearchParams(location.search);
   var config = Object.assign({}, CONFIG);
-  ["name", "adr", "layer"].forEach(function (key) {
+  ["name", "adr"].forEach(function (key) {
     if (params.has(key)) config[key] = params.get(key);
   });
   ["lat", "lng", "clat", "clng", "z"].forEach(function (key) {
@@ -295,9 +319,13 @@
   if (params.has("anreise")) config.anreise = params.get("anreise") === "1";
 
   var place = L.latLng(config.lat, config.lng);
-  var start = (config.clat !== null && config.clng !== null)
-    ? L.latLng(config.clat, config.clng)
-    : place;
+  var viewFromLink = params.has("z") || params.has("clat") || params.has("clng");
+
+  var anreiseBounds = null;
+  LEGS.forEach(function (leg) {
+    var bounds = L.latLngBounds(leg.points);
+    anreiseBounds = anreiseBounds ? anreiseBounds.extend(bounds) : bounds;
+  });
 
   /* ---------------- Karte ---------------- */
 
@@ -305,38 +333,25 @@
     zoomControl: false,
     scrollWheelZoom: false,
     maxZoom: 19
-  }).setView(start, config.z);
+  });
+
+  if (viewFromLink) {
+    var center = (config.clat !== null && config.clng !== null)
+      ? L.latLng(config.clat, config.clng)
+      : place;
+    map.setView(center, config.z);
+  } else if (config.anreise) {
+    map.fitBounds(anreiseBounds, { padding: [44, 44], animate: false });
+  } else {
+    map.setView(place, HOUSE_ZOOM);
+  }
+
+  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+    maxZoom: 19,
+    attribution: "Luftbild: Esri, Maxar, Earthstar Geographics"
+  }).addTo(map);
 
   L.control.zoom({ position: "bottomright" }).addTo(map);
-
-  var layers = {
-    map: L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-      subdomains: "abcd",
-      maxZoom: 19,
-      attribution: "© OpenStreetMap · © CARTO"
-    }),
-    sat: L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
-      maxZoom: 19,
-      attribution: "Luftbild: Esri, Maxar, Earthstar Geographics"
-    })
-  };
-
-  var active = layers[config.layer] ? config.layer : "sat";
-  layers[active].addTo(map);
-  el("btn-map").setAttribute("aria-pressed", String(active === "map"));
-  el("btn-sat").setAttribute("aria-pressed", String(active === "sat"));
-
-  function switchLayer(next) {
-    if (next === active) return;
-    map.removeLayer(layers[active]);
-    layers[next].addTo(map);
-    active = next;
-    el("btn-map").setAttribute("aria-pressed", String(next === "map"));
-    el("btn-sat").setAttribute("aria-pressed", String(next === "sat"));
-    updateLink();
-  }
-  el("btn-map").addEventListener("click", function () { switchLayer("map"); });
-  el("btn-sat").addEventListener("click", function () { switchLayer("sat"); });
 
   /* ---------------- Nadel und Infokarte ---------------- */
 
@@ -349,6 +364,8 @@
           '<circle cx="15" cy="14.5" r="4.4" fill="#fff"/></svg></div>'
   });
   var pin = L.marker(place, { icon: pinIcon, keyboard: false, alt: config.name }).addTo(map);
+
+  el("c-trip").textContent = TRIP;
 
   function describePlace() {
     pin.setLatLng(place);
@@ -368,7 +385,6 @@
 
   var anreiseLayer = L.layerGroup();
   var stopMarkers = [];
-  var anreiseBounds = null;
 
   LEGS.forEach(function (leg) {
     var stroke = STROKES[leg.style];
@@ -380,9 +396,6 @@
       color: "#d92d20", weight: stroke.weight, opacity: 1,
       dashArray: stroke.dashArray, lineCap: "round", lineJoin: "round", interactive: false
     }).addTo(anreiseLayer);
-    anreiseBounds = anreiseBounds
-      ? anreiseBounds.extend(L.latLngBounds(leg.points))
-      : L.latLngBounds(leg.points);
   });
 
   STOPS.forEach(function (stop) {
@@ -414,6 +427,7 @@
     el("to-route").setAttribute("aria-pressed", String(visible));
     el("to-house").setAttribute("aria-pressed", String(!visible));
     el("to-route").hidden = !config.anreise;
+    el("card").dataset.view = visible ? "anreise" : "haus";
     if (!visible) return;
 
     stopMarkers.forEach(function (entry) {
@@ -425,11 +439,28 @@
   map.on("zoomend", refreshAnreise);
 
   el("to-house").addEventListener("click", function () {
-    map.setView(place, Math.max(config.z, 18), { animate: false });
+    map.setView(place, HOUSE_ZOOM, { animate: false });
   });
   el("to-route").addEventListener("click", function () {
-    if (anreiseBounds) map.fitBounds(anreiseBounds, { padding: [42, 42], animate: false });
+    map.fitBounds(anreiseBounds, { padding: [44, 44], animate: false });
   });
+
+  /* ---------------- Vollbild, falls die Umgebung es erlaubt ---------------- */
+
+  var root = document.documentElement;
+  var enterFullscreen = root.requestFullscreen || root.webkitRequestFullscreen;
+  var leaveFullscreen = document.exitFullscreen || document.webkitExitFullscreen;
+  var inFullscreen = function () { return document.fullscreenElement || document.webkitFullscreenElement; };
+
+  if ((document.fullscreenEnabled || document.webkitFullscreenEnabled) && enterFullscreen) {
+    el("expand").classList.add("available");
+    el("expand").addEventListener("click", function () {
+      if (inFullscreen()) leaveFullscreen.call(document);
+      else enterFullscreen.call(root);
+    });
+    document.addEventListener("fullscreenchange", function () { map.invalidateSize(); });
+    document.addEventListener("webkitfullscreenchange", function () { map.invalidateSize(); });
+  }
 
   /* ---------------- Rücksicht auf die Notion-Seite ---------------- */
   /* Mausrad zoomt erst nach einem Klick, Finger bewegen die Karte nur zu zweit.
@@ -491,7 +522,6 @@
       name: el("b-name").value.trim(),
       adr: el("b-adr").value.trim()
     });
-    if (active !== "sat") query.set("layer", active);
     if (!config.anreise) query.set("anreise", "0");
     el("b-link").value = location.origin + location.pathname + "?" + query.toString();
   }
