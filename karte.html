@@ -42,7 +42,7 @@
   }
   @media (prefers-reduced-motion: reduce) { .pin::before { animation: none; opacity: 0; } }
 
-  /* ---------- Halte auf der Anreise ---------- */
+  /* ---------- Halte ---------- */
   .stop-dot {
     position: absolute; left: 0; top: 0;
     width: 12px; height: 12px;
@@ -53,17 +53,18 @@
   }
   .stop.nodot .stop-dot { display: none; }
   .stop-chip {
-    position: absolute; left: 18px; top: -6px;
+    position: absolute; left: 18px; top: -8px;
     white-space: nowrap;
-    background: rgba(255,255,255,.94);
+    background: rgba(255,255,255,.95);
     border-radius: 6px;
-    padding: 3px 7px;
+    padding: 4px 8px;
     box-shadow: 0 1px 4px rgba(0,0,0,.3);
     pointer-events: none;
   }
   .stop.left .stop-chip { left: auto; right: 18px; text-align: right; }
-  .stop-chip b { display: block; font-size: 11.5px; font-weight: 600; line-height: 1.25; }
-  .stop-chip i { display: block; font-family: var(--mono); font-style: normal; font-size: 10px; color: var(--muted); }
+  .stop-chip .nm { display: block; font-size: 11.5px; font-weight: 600; line-height: 1.25; }
+  .stop-chip .tm { display: block; font-family: var(--mono); font-size: 10.5px; line-height: 1.4; }
+  .stop-chip .gl { display: block; font-family: var(--mono); font-size: 10.5px; line-height: 1.4; color: var(--muted); }
   .stop.quiet .stop-chip { display: none; }
 
   /* ---------- Infokarte ---------- */
@@ -86,7 +87,7 @@
     margin-top: 7px; padding-top: 7px;
     border-top: 1px solid rgba(0,0,0,.08);
   }
-  .card[data-view="anreise"] .trip { display: block; }
+  .card[data-view="anreise"] .trip, .card[data-view="abreise"] .trip { display: block; }
   .card .row { display: flex; align-items: center; gap: 12px; margin-top: 10px; flex-wrap: wrap; }
   .card a {
     font-size: 12.5px; font-weight: 500; color: var(--signal);
@@ -95,14 +96,35 @@
   .card a:hover { border-bottom-color: var(--signal); }
   .coords { font-family: var(--mono); font-size: 11px; color: var(--muted); }
 
+  .card[data-view="wetter"] .place { display: none; }
+  .card:not([data-view="wetter"]) .weather { display: none; }
+
+  /* ---------- Wetter ---------- */
+  .w-list { max-height: min(46vh, 250px); overflow: auto; margin-top: 9px; padding-top: 8px; border-top: 1px solid rgba(0,0,0,.08); }
+  .w-row { display: grid; grid-template-columns: 62px 20px 1fr auto; align-items: center; gap: 8px; padding: 3px 0; }
+  .w-row + .w-row { border-top: 1px solid rgba(0,0,0,.05); }
+  .w-day  { font-family: var(--mono); font-size: 11.5px; }
+  .w-sym  { font-size: 13px; line-height: 1; text-align: center; }
+  .w-temp { font-family: var(--mono); font-size: 11.5px; }
+  .w-rain { font-family: var(--mono); font-size: 10.5px; color: var(--muted); text-align: right; white-space: nowrap; }
+  .w-open { grid-column: 2 / -1; font-size: 11px; color: var(--muted); }
+  .w-note { font-size: 10.5px; color: var(--muted); line-height: 1.45; margin: 8px 0 0; }
+  .w-retry {
+    font: inherit; font-size: 12.5px; font-weight: 500; color: var(--signal);
+    background: transparent; border: 0; padding: 0; margin-top: 6px; cursor: pointer;
+    text-decoration: underline;
+  }
+
   /* ---------- Bedienelemente, links oben, weg von Notions Blockmenü ---------- */
   .controls {
     position: absolute;
     left: 12px; top: 12px;
     z-index: 500;
     display: flex;
+    flex-wrap: wrap;
     gap: 7px;
     align-items: center;
+    max-width: calc(100% - 24px);
   }
   .pills {
     display: flex;
@@ -114,10 +136,13 @@
   .pills button {
     font: inherit; font-size: 12.5px; font-weight: 500;
     border: 0; background: transparent; color: var(--muted);
-    padding: 6px 13px; border-radius: 999px; cursor: pointer;
+    padding: 6px 12px; border-radius: 999px; cursor: pointer;
+    white-space: nowrap;
   }
   #to-house[aria-pressed="true"] { background: var(--signal); color: #fff; }
-  #to-route[aria-pressed="true"] { background: var(--route); color: #fff; }
+  #to-anreise[aria-pressed="true"], #to-abreise[aria-pressed="true"] { background: var(--route); color: #fff; }
+  #to-weather[aria-pressed="true"] { background: #1d4e89; color: #fff; }
+  .short { display: none; }
 
   .expand {
     width: 34px; height: 34px;
@@ -128,7 +153,7 @@
   }
   .expand.available { display: grid; }
 
-  .pills button:focus-visible, .expand:focus-visible,
+  .pills button:focus-visible, .expand:focus-visible, .w-retry:focus-visible,
   .bar button:focus-visible, .bar input:focus-visible {
     outline: 2px solid var(--signal); outline-offset: 2px;
   }
@@ -193,14 +218,19 @@
   @media (max-width: 480px) {
     .card { left: 8px; right: 8px; bottom: 8px; max-width: none; padding: 8px 11px; }
     .card h1 { font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .card p, .card .trip, .coords { display: none; }
-    .card[data-view="anreise"] .trip { display: none; }
+    .place p, .place .trip, .coords { display: none; }
+    .card[data-view="anreise"] .trip, .card[data-view="abreise"] .trip { display: none; }
     .card .row { margin-top: 6px; }
-    .pills button { font-size: 11.5px; padding: 5px 10px; }
+    .w-list { max-height: 40vh; }
+    .controls { left: 8px; top: 8px; gap: 5px; }
+    .pills { padding: 2px; }
+    .pills button { font-size: 11.5px; padding: 5px 9px; }
+    .long { display: none; }
+    .short { display: inline; }
     .expand { width: 30px; height: 30px; }
-    .stop-chip { padding: 2px 5px; }
-    .stop-chip b { font-size: 10px; }
-    .stop-chip i { display: none; }
+    .stop-chip { padding: 3px 6px; }
+    .stop-chip .nm { font-size: 10px; }
+    .stop-chip .tm, .stop-chip .gl { font-size: 9.5px; }
     .leaflet-control-attribution { font-size: 9px; }
     .leaflet-control-zoom { transform: scale(.88); transform-origin: bottom right; }
   }
@@ -220,8 +250,14 @@
 
 <div class="controls">
   <div class="pills">
-    <button type="button" id="to-house" aria-pressed="false">Haus</button>
-    <button type="button" id="to-route" aria-pressed="true">Anreise</button>
+    <button type="button" id="to-house" aria-pressed="false">
+      <span class="long">Freizeithaus</span><span class="short">Haus</span>
+    </button>
+    <button type="button" id="to-anreise" aria-pressed="true">Anreise</button>
+    <button type="button" id="to-abreise" aria-pressed="false">Abreise</button>
+  </div>
+  <div class="pills">
+    <button type="button" id="to-weather" aria-pressed="false">Wetter</button>
   </div>
   <button type="button" class="expand" id="expand" title="Vollbild" aria-label="Vollbild">
     <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
@@ -231,12 +267,19 @@
 </div>
 
 <div class="card" id="card">
-  <h1 id="c-name"></h1>
-  <p id="c-adr"></p>
-  <p class="trip" id="c-trip"></p>
-  <div class="row">
-    <a id="c-route" href="#" target="_blank" rel="noopener">Route öffnen</a>
-    <span class="coords" id="c-coords"></span>
+  <div class="place">
+    <h1 id="c-name"></h1>
+    <p id="c-adr"></p>
+    <p class="trip" id="c-trip"></p>
+    <div class="row">
+      <a id="c-route" href="#" target="_blank" rel="noopener">Route öffnen</a>
+      <span class="coords" id="c-coords"></span>
+    </div>
+  </div>
+  <div class="weather">
+    <h1>Wetter am Freizeithaus</h1>
+    <div id="w-body"></div>
+    <p class="w-note" id="w-note"></p>
   </div>
 </div>
 
@@ -246,7 +289,7 @@
   <span class="tip">Klick setzt die Nadel</span>
   <input type="text" class="name" id="b-name" placeholder="Name">
   <input type="text" class="adr" id="b-adr" placeholder="Adresse">
-  <label><input type="checkbox" id="b-anreise" checked> Anreise</label>
+  <label><input type="checkbox" id="b-routen" checked> Routen</label>
   <input type="text" class="link" id="b-link" readonly>
   <button type="button" id="b-copy">Link kopieren</button>
 </div>
@@ -257,8 +300,7 @@
   "use strict";
 
   /* Voreinstellung: Sommerlager Dänemark.
-     lat/lng ist die Nadel, clat/clng/z der Bildausschnitt beim Öffnen.
-     Ohne Angabe im Link startet die Karte auf der ganzen Anreise. */
+     lat/lng ist die Nadel, clat/clng/z der Bildausschnitt beim Öffnen. */
   var CONFIG = {
     lat: 56.4262961,
     lng: 8.9400606,
@@ -267,52 +309,94 @@
     z: 18,
     name: "Trevæld Spejdercenter",
     adr: "Trevældvej 7, 7830 Vinderup, Dänemark",
-    anreise: true
+    routen: true,
+    route: "anreise"
   };
 
+  /* Zeitraum für die Wettervorhersage: Anreisetag bis Abreisetag. */
+  var LAGER = { von: "2026-08-04", bis: "2026-08-15" };
+
   var HOUSE_ZOOM = 18;
+  var ROUTE_MAX_ZOOM = 12;
 
-  /* Ab dieser Zoomstufe abwärts ist die Anreise zu sehen. Weiter drin wäre die
-     grobe Linie irreführend, weil sie nicht jeder Kurve folgt. */
-  var ANREISE_MAX_ZOOM = 12;
+  /* Feste Punkte, damit Hin- und Rückweg dieselben Koordinaten benutzen. */
+  var P = {
+    l13:        [48.136198, 11.562735],
+    muenchen:   [48.140411, 11.558268],
+    ingolstadt: [48.744900, 11.437400],
+    nuernberg:  [49.445500, 11.082400],
+    wuerzburg:  [49.801600,  9.935800],
+    fulda:      [50.554500,  9.684400],
+    kassel:     [51.312800,  9.447000],
+    goettingen: [51.536600,  9.926500],
+    hannover:   [52.376500,  9.741100],
+    lueneburg:  [53.249600, 10.414700],
+    harburg:    [53.456255,  9.991618],
+    hamburg:    [53.552800, 10.006800],
+    dammtor:    [53.560800,  9.989300],
+    altona:     [53.552800,  9.935000],
+    eidelstedt: [53.604700,  9.904200],
+    pinneberg:  [53.655355,  9.797693],
+    elmshorn:   [53.753900,  9.653400],
+    neumuenster:[54.072300,  9.980800],
+    rendsburg:  [54.303300,  9.664700],
+    schleswig:  [54.506000,  9.568000],
+    flensburg:  [54.774671,  9.436837],
+    padborg:    [54.825000,  9.360000],
+    aabenraa:   [55.044400,  9.418000],
+    haderslev:  [55.249700,  9.489000],
+    kolding:    [55.490400,  9.472200],
+    vejle:      [55.709000,  9.535000],
+    give:       [55.850000,  9.240000],
+    herning:    [56.139000,  8.976000],
+    sevel:      [56.380000,  8.870000],
+    trevaeld:   [56.426296,  8.940061]
+  };
 
-  var TRIP = "München Hbf 06:09 → Trevæld 20:00\n13 Std 51 Min · Zug, Zug, Zug, Bus";
-
-  /* Zwischenpunkte liegen grob am tatsächlichen Streckenverlauf,
-     damit die Linie nicht quer durchs Land schneidet. */
-  var LEGS = [
-    { style: "walk", points: [[48.136198, 11.562735], [48.140411, 11.558268]] },
-    { style: "rail", points: [
-      [48.140411, 11.558268], [48.744900, 11.437400], [49.445500, 11.082400],
-      [49.801600, 9.935800], [50.554500, 9.684400], [51.312800, 9.447000],
-      [51.536600, 9.926500], [52.376500, 9.741100], [53.249600, 10.414700],
-      [53.456255, 9.991618]
-    ] },
-    { style: "rail", points: [
-      [53.456255, 9.991618], [53.552800, 10.006800], [53.552800, 9.935000],
-      [53.604700, 9.904200], [53.655355, 9.797693]
-    ] },
-    { style: "rail", points: [
-      [53.655355, 9.797693], [53.753900, 9.653400], [54.072300, 9.980800],
-      [54.303300, 9.664700], [54.506000, 9.568000], [54.774671, 9.436837]
-    ] },
-    { style: "bus", points: [
-      [54.774671, 9.436837], [54.825000, 9.360000], [55.044400, 9.418000],
-      [55.249700, 9.489000], [55.490400, 9.472200], [55.709000, 9.535000],
-      [55.850000, 9.240000], [56.139000, 8.976000], [56.380000, 8.870000],
-      [56.426296, 8.940061]
-    ] }
-  ];
-
-  /* minZoom staffelt die Beschriftung: erst die Endpunkte, dann die Umstiege. */
-  var STOPS = [
-    { at: [48.136198, 11.562735], name: "Landwehrstraße 13", time: "Treffpunkt",         minZoom: 11 },
-    { at: [48.140411, 11.558268], name: "München Hbf",       time: "ab 06:09 · ICE 886",  minZoom: 4 },
-    { at: [53.456255, 9.991618],  name: "Hamburg-Harburg",   time: "11:44 → 11:59 · S3",  minZoom: 7 },
-    { at: [53.655355, 9.797693],  name: "Pinneberg",         time: "12:53 → 12:57 · RE7", minZoom: 9, side: "left" },
-    { at: [54.774671, 9.436837],  name: "Flensburg Hbf",     time: "14:42 → 16:30 · Bus", minZoom: 7 },
-    { at: [56.426296, 8.940061],  name: "Trevæld",           time: "an 20:00",            minZoom: 4, side: "left", dot: false }
-  ];
+  /* Zwischenpunkte liegen grob am tatsächlichen Streckenverlauf.
+     Halte: zeit = Uhrzeiten, gleis = Verkehrsmittel und Bahnsteig. */
+  var JOURNEYS = {
+    anreise: {
+      trip: "L13 05:30 → Trevæld 20:00\n14 Std 30 Min · Fußweg, Zug, Zug, Zug, Bus",
+      legs: [
+        { style: "walk", points: [P.l13, P.muenchen] },
+        { style: "rail", points: [P.muenchen, P.ingolstadt, P.nuernberg, P.wuerzburg, P.fulda,
+                                  P.kassel, P.goettingen, P.hannover, P.lueneburg, P.harburg] },
+        { style: "rail", points: [P.harburg, P.hamburg, P.altona, P.eidelstedt, P.pinneberg] },
+        { style: "rail", points: [P.pinneberg, P.elmshorn, P.neumuenster, P.rendsburg, P.schleswig, P.flensburg] },
+        { style: "bus",  points: [P.flensburg, P.padborg, P.aabenraa, P.haderslev, P.kolding,
+                                  P.vejle, P.give, P.herning, P.sevel, P.trevaeld] }
+      ],
+      stops: [
+        { at: P.l13,       name: "Landwehrstraße 13", zeit: "ab 05:30",            gleis: "Fußweg zum Hbf", minZoom: 11 },
+        { at: P.muenchen,  name: "München Hbf",       zeit: "an 05:55 · ab 06:09", gleis: "ICE 886 · Gleis 23", minZoom: 4 },
+        { at: P.harburg,   name: "Hamburg-Harburg",   zeit: "an 11:44 · ab 11:59", gleis: "S3 · Gleis 1 → 11",  minZoom: 7 },
+        { at: P.pinneberg, name: "Pinneberg",         zeit: "an 12:53 · ab 12:57", gleis: "RE7 · Gleis 1 → offen", minZoom: 9, side: "left" },
+        { at: P.flensburg, name: "Flensburg Hbf",     zeit: "an 14:42 · ab 16:30", gleis: "Bus zum Freizeithaus", minZoom: 7 },
+        { at: P.trevaeld,  name: "Trevæld",           zeit: "an 20:00",            minZoom: 4, side: "left", dot: false }
+      ]
+    },
+    abreise: {
+      trip: "Trevæld 07:30 → L13 21:10\n13 Std 40 Min · Bus, Zug, Zug, Fußweg",
+      legs: [
+        { style: "bus",  points: [P.trevaeld, P.sevel, P.herning, P.give, P.vejle,
+                                  P.kolding, P.haderslev, P.aabenraa, P.padborg, P.flensburg] },
+        { style: "rail", points: [P.flensburg, P.schleswig, P.rendsburg, P.neumuenster,
+                                  P.elmshorn, P.pinneberg, P.altona, P.dammtor] },
+        { style: "rail", points: [P.dammtor, P.hamburg, P.harburg, P.lueneburg, P.hannover,
+                                  P.goettingen, P.kassel, P.fulda, P.wuerzburg, P.nuernberg,
+                                  P.ingolstadt, P.muenchen] },
+        { style: "walk", points: [P.muenchen, P.l13] }
+      ],
+      stops: [
+        { at: P.trevaeld,  name: "Trevæld",           zeit: "ab 07:30",            gleis: "Bus nach Flensburg", minZoom: 4, side: "left", dot: false },
+        { at: P.flensburg, name: "Flensburg Hbf",     zeit: "an 11:00 · ab 12:22", gleis: "RE7 · Gleis 2",      minZoom: 7 },
+        { at: P.dammtor,   name: "Hamburg Dammtor",   zeit: "an 14:16 · ab 14:53", gleis: "ICE 681 · Gleis 4",  minZoom: 7 },
+        { at: P.muenchen,  name: "München Hbf",       zeit: "an 20:50",            gleis: "Gleis 19",           minZoom: 4 },
+        { at: P.l13,       name: "Landwehrstraße 13", zeit: "an 21:10",            gleis: "Fußweg vom Hbf",     minZoom: 11 }
+      ]
+    }
+  };
 
   var el = function (id) { return document.getElementById(id); };
 
@@ -336,27 +420,30 @@
     var value = parseFloat(params.get(key));
     if (!isNaN(value)) config[key] = value;
   });
-  if (params.has("anreise")) config.anreise = params.get("anreise") === "1";
+  if (params.has("routen")) config.routen = params.get("routen") === "1";
+  if (JOURNEYS[params.get("route")]) config.route = params.get("route");
 
   var place = L.latLng(config.lat, config.lng);
+  var current = config.route;
+  var panel = "ort";
   var viewFromLink = params.has("z") || params.has("clat") || params.has("clng");
 
   function fitPadding() {
     return map.getSize().x < 480 ? [20, 20] : [44, 44];
   }
 
-  var anreiseBounds = null;
-  LEGS.forEach(function (leg) {
-    var bounds = L.latLngBounds(leg.points);
-    anreiseBounds = anreiseBounds ? anreiseBounds.extend(bounds) : bounds;
-  });
-
   /* ---------------- Karte ---------------- */
 
-  var map = L.map("map", {
-    zoomControl: false,
-    scrollWheelZoom: false,
-    maxZoom: 19
+  var map = L.map("map", { zoomControl: false, scrollWheelZoom: false, maxZoom: 19 });
+
+  var routes = {};
+  Object.keys(JOURNEYS).forEach(function (key) {
+    var bounds = null;
+    JOURNEYS[key].legs.forEach(function (leg) {
+      var legBounds = L.latLngBounds(leg.points);
+      bounds = bounds ? bounds.extend(legBounds) : legBounds;
+    });
+    routes[key] = { layer: L.layerGroup(), bounds: bounds, markers: [] };
   });
 
   if (viewFromLink) {
@@ -364,8 +451,8 @@
       ? L.latLng(config.clat, config.clng)
       : place;
     map.setView(center, config.z);
-  } else if (config.anreise) {
-    map.fitBounds(anreiseBounds, { padding: fitPadding(), animate: false });
+  } else if (config.routen) {
+    map.fitBounds(routes[current].bounds, { padding: fitPadding(), animate: false });
   } else {
     map.setView(place, HOUSE_ZOOM);
   }
@@ -389,8 +476,6 @@
   });
   var pin = L.marker(place, { icon: pinIcon, keyboard: false, alt: config.name }).addTo(map);
 
-  el("c-trip").textContent = TRIP;
-
   function describePlace() {
     pin.setLatLng(place);
     el("c-name").textContent = el("b-name").value.trim() || config.name;
@@ -399,7 +484,7 @@
     el("c-route").href = "https://www.google.com/maps/dir/?api=1&destination=" + place.lat + "," + place.lng;
   }
 
-  /* ---------------- Anreise ---------------- */
+  /* ---------------- Routen zeichnen ---------------- */
 
   var STROKES = {
     walk: { weight: 3, dashArray: "1 7" },
@@ -407,66 +492,255 @@
     bus:  { weight: 3.5, dashArray: "9 7" }
   };
 
-  var anreiseLayer = L.layerGroup();
-  var stopMarkers = [];
-
-  LEGS.forEach(function (leg) {
-    var stroke = STROKES[leg.style];
-    L.polyline(leg.points, {
-      color: "#ffffff", weight: stroke.weight + 3, opacity: .8,
-      lineCap: "round", lineJoin: "round", interactive: false
-    }).addTo(anreiseLayer);
-    L.polyline(leg.points, {
-      color: "#d92d20", weight: stroke.weight, opacity: 1,
-      dashArray: stroke.dashArray, lineCap: "round", lineJoin: "round", interactive: false
-    }).addTo(anreiseLayer);
-  });
-
-  STOPS.forEach(function (stop) {
-    var classes = "stop";
-    if (stop.side === "left") classes += " left";
-    if (stop.dot === false) classes += " nodot";
-    var marker = L.marker(stop.at, {
-      keyboard: false,
-      interactive: false,
-      icon: L.divIcon({
-        className: classes,
-        iconSize: [12, 12],
-        iconAnchor: [6, 6],
-        html: '<span class="stop-dot"></span><span class="stop-chip"><b>' +
-              stop.name + '</b><i>' + stop.time + '</i></span>'
-      })
-    });
-    marker.addTo(anreiseLayer);
-    stopMarkers.push({ marker: marker, minZoom: stop.minZoom });
-  });
-
-  function refreshAnreise() {
-    var zoom = map.getZoom();
-    var visible = config.anreise && zoom <= ANREISE_MAX_ZOOM;
-
-    if (visible && !map.hasLayer(anreiseLayer)) anreiseLayer.addTo(map);
-    if (!visible && map.hasLayer(anreiseLayer)) map.removeLayer(anreiseLayer);
-
-    el("to-route").setAttribute("aria-pressed", String(visible));
-    el("to-house").setAttribute("aria-pressed", String(!visible));
-    el("to-route").hidden = !config.anreise;
-    el("card").dataset.view = visible ? "anreise" : "haus";
-    if (!visible) return;
-
-    stopMarkers.forEach(function (entry) {
-      var element = entry.marker.getElement();
-      if (element) element.classList.toggle("quiet", zoom < entry.minZoom);
-    });
+  function escapeText(value) {
+    return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
 
-  map.on("zoomend", refreshAnreise);
+  Object.keys(JOURNEYS).forEach(function (key) {
+    var route = routes[key];
+
+    JOURNEYS[key].legs.forEach(function (leg) {
+      var stroke = STROKES[leg.style];
+      L.polyline(leg.points, {
+        color: "#ffffff", weight: stroke.weight + 3, opacity: .8,
+        lineCap: "round", lineJoin: "round", interactive: false
+      }).addTo(route.layer);
+      L.polyline(leg.points, {
+        color: "#d92d20", weight: stroke.weight, opacity: 1,
+        dashArray: stroke.dashArray, lineCap: "round", lineJoin: "round", interactive: false
+      }).addTo(route.layer);
+    });
+
+    JOURNEYS[key].stops.forEach(function (stop) {
+      var classes = "stop";
+      if (stop.side === "left") classes += " left";
+      if (stop.dot === false) classes += " nodot";
+      var html = '<span class="stop-dot"></span><span class="stop-chip">' +
+                 '<span class="nm">' + escapeText(stop.name) + '</span>' +
+                 '<span class="tm">' + escapeText(stop.zeit) + '</span>' +
+                 (stop.gleis ? '<span class="gl">' + escapeText(stop.gleis) + '</span>' : '') +
+                 '</span>';
+      var marker = L.marker(stop.at, {
+        keyboard: false,
+        interactive: false,
+        icon: L.divIcon({ className: classes, iconSize: [12, 12], iconAnchor: [6, 6], html: html })
+      });
+      marker.addTo(route.layer);
+      route.markers.push({ marker: marker, minZoom: stop.minZoom });
+    });
+  });
+
+  function refreshRoutes() {
+    var zoom = map.getZoom();
+    var visible = config.routen && zoom <= ROUTE_MAX_ZOOM;
+
+    Object.keys(routes).forEach(function (key) {
+      var route = routes[key];
+      var show = visible && key === current;
+      if (show && !map.hasLayer(route.layer)) route.layer.addTo(map);
+      if (!show && map.hasLayer(route.layer)) map.removeLayer(route.layer);
+      if (!show) return;
+      route.markers.forEach(function (entry) {
+        var element = entry.marker.getElement();
+        if (element) element.classList.toggle("quiet", zoom < entry.minZoom);
+      });
+    });
+
+    var onWeather = panel === "wetter";
+    el("to-house").setAttribute("aria-pressed", String(!visible && !onWeather));
+    el("to-anreise").setAttribute("aria-pressed", String(visible && !onWeather && current === "anreise"));
+    el("to-abreise").setAttribute("aria-pressed", String(visible && !onWeather && current === "abreise"));
+    el("to-weather").setAttribute("aria-pressed", String(onWeather));
+    el("to-anreise").hidden = !config.routen;
+    el("to-abreise").hidden = !config.routen;
+
+    el("card").dataset.view = onWeather ? "wetter" : (visible ? current : "haus");
+    el("c-trip").textContent = JOURNEYS[current].trip;
+  }
+
+  map.on("zoomend", refreshRoutes);
 
   el("to-house").addEventListener("click", function () {
+    panel = "ort";
     map.setView(place, HOUSE_ZOOM, { animate: false });
+    refreshRoutes();
   });
-  el("to-route").addEventListener("click", function () {
-    map.fitBounds(anreiseBounds, { padding: fitPadding(), animate: false });
+
+  function showRoute(key) {
+    panel = "ort";
+    current = key;
+    map.fitBounds(routes[key].bounds, { padding: fitPadding(), animate: false });
+    refreshRoutes();
+  }
+  el("to-anreise").addEventListener("click", function () { showRoute("anreise"); });
+  el("to-abreise").addEventListener("click", function () { showRoute("abreise"); });
+
+  /* ---------------- Wetter ---------------- */
+  /* Open-Meteo braucht keinen Schlüssel und kein Konto. Abgerufen wird erst
+     beim Klick, das Ergebnis hält eine halbe Stunde. Fällt der Dienst aus,
+     betrifft das nur diese Karte, nicht den Rest. */
+
+  var WMO = {
+    0:  ["\u2600\uFE0F", "klar"],
+    1:  ["\uD83C\uDF24\uFE0F", "meist klar"],
+    2:  ["\u26C5", "wolkig"],
+    3:  ["\u2601\uFE0F", "bedeckt"],
+    45: ["\uD83C\uDF2B\uFE0F", "Nebel"],
+    48: ["\uD83C\uDF2B\uFE0F", "Reifnebel"],
+    51: ["\uD83C\uDF26\uFE0F", "leichter Niesel"],
+    53: ["\uD83C\uDF26\uFE0F", "Niesel"],
+    55: ["\uD83C\uDF27\uFE0F", "starker Niesel"],
+    61: ["\uD83C\uDF26\uFE0F", "leichter Regen"],
+    63: ["\uD83C\uDF27\uFE0F", "Regen"],
+    65: ["\uD83C\uDF27\uFE0F", "starker Regen"],
+    71: ["\u2744\uFE0F", "leichter Schnee"],
+    73: ["\u2744\uFE0F", "Schnee"],
+    75: ["\u2744\uFE0F", "starker Schnee"],
+    80: ["\uD83C\uDF26\uFE0F", "leichte Schauer"],
+    81: ["\uD83C\uDF27\uFE0F", "Schauer"],
+    82: ["\u26C8\uFE0F", "heftige Schauer"],
+    95: ["\u26C8\uFE0F", "Gewitter"],
+    96: ["\u26C8\uFE0F", "Gewitter mit Hagel"],
+    99: ["\u26C8\uFE0F", "Gewitter mit Hagel"]
+  };
+
+  var WEEKDAYS = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+  var weatherCache = null;
+
+  function dayList() {
+    var days = [];
+    var cursor = new Date(LAGER.von + "T12:00:00");
+    var last = new Date(LAGER.bis + "T12:00:00");
+    while (cursor <= last && days.length < 40) {
+      days.push(new Date(cursor));
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return days;
+  }
+
+  function isoDay(date) {
+    return date.getFullYear() + "-" +
+           String(date.getMonth() + 1).padStart(2, "0") + "-" +
+           String(date.getDate()).padStart(2, "0");
+  }
+
+  function labelDay(date) {
+    return WEEKDAYS[date.getDay()] + " " +
+           String(date.getDate()).padStart(2, "0") + "." +
+           String(date.getMonth() + 1).padStart(2, "0") + ".";
+  }
+
+  function renderWeather(data) {
+    var body = el("w-body");
+    var rows = [];
+
+    dayList().forEach(function (date) {
+      var index = data.daily.time.indexOf(isoDay(date));
+      var row = document.createElement("div");
+      row.className = "w-row";
+
+      var day = document.createElement("span");
+      day.className = "w-day";
+      day.textContent = labelDay(date);
+      row.appendChild(day);
+
+      if (index === -1) {
+        var open = document.createElement("span");
+        open.className = "w-open";
+        open.textContent = "noch keine Vorhersage";
+        row.appendChild(open);
+        rows.push(row);
+        return;
+      }
+
+      var code = WMO[data.daily.weather_code[index]] || ["\u2022", "unbekannt"];
+      var symbol = document.createElement("span");
+      symbol.className = "w-sym";
+      symbol.textContent = code[0];
+      symbol.title = code[1];
+
+      var temp = document.createElement("span");
+      temp.className = "w-temp";
+      temp.textContent = Math.round(data.daily.temperature_2m_max[index]) + "° / " +
+                         Math.round(data.daily.temperature_2m_min[index]) + "°";
+
+      var rain = document.createElement("span");
+      rain.className = "w-rain";
+      var mm = data.daily.precipitation_sum[index];
+      rain.textContent = (mm === null ? "–" : (Math.round(mm * 10) / 10) + " mm");
+
+      row.appendChild(symbol);
+      row.appendChild(temp);
+      row.appendChild(rain);
+      rows.push(row);
+    });
+
+    var list = document.createElement("div");
+    list.className = "w-list";
+    rows.forEach(function (row) { list.appendChild(row); });
+    body.replaceChildren(list);
+
+    var stand = new Date(data.abgerufen);
+    el("w-note").textContent = "Stand " + labelDay(stand) + " " +
+      String(stand.getHours()).padStart(2, "0") + ":" +
+      String(stand.getMinutes()).padStart(2, "0") +
+      " · Quelle Open-Meteo. Über eine Woche im Voraus ist das ein Trend, keine Zusage.";
+  }
+
+  function weatherMessage(text, withRetry) {
+    var paragraph = document.createElement("p");
+    paragraph.className = "w-note";
+    paragraph.textContent = text;
+    el("w-body").replaceChildren(paragraph);
+    if (withRetry) {
+      var retry = document.createElement("button");
+      retry.type = "button";
+      retry.className = "w-retry";
+      retry.textContent = "Erneut versuchen";
+      retry.addEventListener("click", function () { loadWeather(true); });
+      el("w-body").appendChild(retry);
+    }
+    el("w-note").textContent = "";
+  }
+
+  function loadWeather(force) {
+    if (!force && weatherCache && Date.now() - weatherCache.abgerufen < 1800000) {
+      renderWeather(weatherCache);
+      return;
+    }
+
+    weatherMessage("Vorhersage wird geladen …", false);
+
+    var url = "https://api.open-meteo.com/v1/forecast" +
+      "?latitude=" + place.lat.toFixed(4) +
+      "&longitude=" + place.lng.toFixed(4) +
+      "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum" +
+      "&timezone=Europe%2FCopenhagen&forecast_days=16";
+
+    var stop = new AbortController();
+    var timer = setTimeout(function () { stop.abort(); }, 9000);
+
+    fetch(url, { signal: stop.signal })
+      .then(function (response) {
+        if (!response.ok) throw new Error("Antwort " + response.status);
+        return response.json();
+      })
+      .then(function (data) {
+        if (!data || !data.daily || !data.daily.time) throw new Error("Unerwartete Antwort");
+        data.abgerufen = Date.now();
+        weatherCache = data;
+        renderWeather(data);
+      })
+      .catch(function () {
+        weatherMessage("Die Vorhersage ist gerade nicht erreichbar. Der Rest der Karte funktioniert weiter.", true);
+      })
+      .then(function () { clearTimeout(timer); });
+  }
+
+  el("to-weather").addEventListener("click", function () {
+    panel = panel === "wetter" ? "ort" : "wetter";
+    refreshRoutes();
+    if (panel === "wetter") loadWeather(false);
   });
 
   /* ---------------- Vollbild, falls die Umgebung es erlaubt ---------------- */
@@ -487,8 +761,6 @@
   }
 
   /* ---------------- Rücksicht auf die Notion-Seite ---------------- */
-  /* Mausrad zoomt erst nach einem Klick, Finger bewegen die Karte nur zu zweit.
-     Sonst bleibt die Notion-Seite beim Scrollen in der Karte hängen. */
 
   var hint = el("hint");
   var hintTimer = null;
@@ -523,7 +795,7 @@
   }
 
   describePlace();
-  refreshAnreise();
+  refreshRoutes();
 
   /* ---------------- Baukasten (nur beim direkten Aufruf sichtbar) ---------------- */
 
@@ -533,7 +805,7 @@
   document.body.classList.add("building");
   el("b-name").value = config.name;
   el("b-adr").value = config.adr;
-  el("b-anreise").checked = config.anreise;
+  el("b-routen").checked = config.routen;
 
   function updateLink() {
     var center = map.getCenter();
@@ -546,23 +818,27 @@
       name: el("b-name").value.trim(),
       adr: el("b-adr").value.trim()
     });
-    if (!config.anreise) query.set("anreise", "0");
+    if (!config.routen) query.set("routen", "0");
+    if (current !== "anreise") query.set("route", current);
     el("b-link").value = location.origin + location.pathname + "?" + query.toString();
   }
 
   map.on("moveend", updateLink);
   map.on("click", function (event) {
     place = event.latlng;
+    weatherCache = null;
     describePlace();
     updateLink();
   });
   el("b-name").addEventListener("input", function () { describePlace(); updateLink(); });
   el("b-adr").addEventListener("input", function () { describePlace(); updateLink(); });
-  el("b-anreise").addEventListener("change", function () {
-    config.anreise = el("b-anreise").checked;
-    refreshAnreise();
+  el("b-routen").addEventListener("change", function () {
+    config.routen = el("b-routen").checked;
+    refreshRoutes();
     updateLink();
   });
+  el("to-anreise").addEventListener("click", updateLink);
+  el("to-abreise").addEventListener("click", updateLink);
   updateLink();
 
   el("b-copy").addEventListener("click", function () {
